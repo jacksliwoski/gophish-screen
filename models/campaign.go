@@ -80,6 +80,7 @@ type Event struct {
 	Time       time.Time `json:"time"`
 	Message    string    `json:"message"`
 	Details    string    `json:"details"`
+	IsScreened bool      `json:"is_screened" gorm:"column:is_screened"`
 }
 
 // EventDetails is a struct that wraps common attributes we want to store
