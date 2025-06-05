@@ -3,53 +3,83 @@
     <h1 class="page-header">
         Dashboard
     </h1>
+
     <div id="loading">
         <i class="fa fa-spinner fa-spin fa-4x"></i>
     </div>
     {{template "flashes" .Flashes}}
+
     <div id="emptyMessage" style="display:none;">
         <div class="alert alert-info">
             No campaigns created yet. Let's create one!
         </div>
     </div>
+
     <div id="dashboard" style="display:none;">
+        <!-- ========== Top “Phishing Success Overview” chart ========== -->
         <div class="row">
-            <div id="overview_chart" style="height:200px;" class="col-lg-12 col-md-12 col-sm-12 col-xs-12"></div>
+            <div id="overview_chart"
+                 style="height:200px;"
+                 class="col-lg-12 col-md-12 col-sm-12 col-xs-12">
+            </div>
         </div>
+
+        <!-- ========== Four Donuts Row ========== -->
         <div class="row">
             <div style="height:200px;" class="col-lg-1 col-md-1"></div>
 
-            <!-- EMAIL SENT CHART -->
-            <div id="sent_chart" style="height:200px;" class="col-lg-2 col-md-2"></div>
+            <!-- 1) EMAIL SENT -->
+            <div id="sent_chart"
+                 style="height:200px;"
+                 class="col-lg-2 col-md-2">
+            </div>
 
-            <!-- EMAIL OPENS CHART -->
+            <!-- 2) EMAIL SCREENED -->
+            <div class="col-lg-2 col-md-2">
+                <div id="screened_chart" style="height:200px;"></div>
+                <div class="legend key-legend"
+                     style="text-align:center; margin-top:8px;">
+                    <span class="legend-dot"
+                          style="display:inline-block;width:12px;height:12px;background-color:#FF9800;margin-right:4px;"></span>
+                    Screened&nbsp;&nbsp;
+                    <span class="legend-dot"
+                          style="display:inline-block;width:12px;height:12px;background-color:#E0E0E0;margin-right:4px;"></span>
+                    Not Screened
+                </div>
+            </div>
+
+            <!-- 3) EMAIL OPENED (Real) -->
             <div class="col-lg-2 col-md-2">
                 <div id="opened_chart" style="height:200px;"></div>
-                <div class="legend key-legend" style="text-align:center; margin-top:8px;">
-                    <span class="legend-dot" style="display:inline-block;width:12px;height:12px;background-color:#4CAF50;margin-right:4px;"></span>Real Opens&nbsp;&nbsp;
-                    <span class="legend-dot" style="display:inline-block;width:12px;height:12px;background-color:#FF9800;margin-right:4px;"></span>Screened&nbsp;&nbsp;
-                    <span class="legend-dot" style="display:inline-block;width:12px;height:12px;background-color:#E0E0E0;margin-right:4px;"></span>Not Opened
+                <div class="legend key-legend"
+                     style="text-align:center; margin-top:8px;">
+                    <span class="legend-dot"
+                          style="display:inline-block;width:12px;height:12px;background-color:#4CAF50;margin-right:4px;"></span>
+                    Real Opens&nbsp;&nbsp;
+                    <span class="legend-dot"
+                          style="display:inline-block;width:12px;height:12px;background-color:#E0E0E0;margin-right:4px;"></span>
+                    Not Opened
                 </div>
             </div>
 
-            <!-- LINK CLICKS CHART -->
+            <!-- 4) LINK CLICKS (Real) -->
             <div class="col-lg-2 col-md-2">
                 <div id="clicked_chart" style="height:200px;"></div>
-                <div class="legend key-legend" style="text-align:center; margin-top:8px;">
-                    <span class="legend-dot" style="display:inline-block;width:12px;height:12px;background-color:#4CAF50;margin-right:4px;"></span>Real Clicks&nbsp;&nbsp;
-                    <span class="legend-dot" style="display:inline-block;width:12px;height:12px;background-color:#FF9800;margin-right:4px;"></span>Screened&nbsp;&nbsp;
-                    <span class="legend-dot" style="display:inline-block;width:12px;height:12px;background-color:#E0E0E0;margin-right:4px;"></span>Not Clicked
+                <div class="legend key-legend"
+                     style="text-align:center; margin-top:8px;">
+                    <span class="legend-dot"
+                          style="display:inline-block;width:12px;height:12px;background-color:#f05b4f;margin-right:4px;"></span>
+                    Real Clicks&nbsp;&nbsp;
+                    <span class="legend-dot"
+                          style="display:inline-block;width:12px;height:12px;background-color:#E0E0E0;margin-right:4px;"></span>
+                    Not Clicked
                 </div>
             </div>
-
-            <!-- SUBMITTED DATA CHART -->
-            <div id="submitted_data_chart" style="height:200px;" class="col-lg-2 col-md-2"></div>
-
-            <!-- EMAIL REPORTED CHART -->
-            <div id="email_reported_chart" style="height:200px;" class="col-lg-2 col-md-2"></div>
 
             <div style="height:200px;" class="col-lg-1 col-md-1"></div>
         </div>
+
+        <!-- ========== Recent Campaigns Table ========== -->
         <div class="row">
             <h2>Recent Campaigns</h2>
         </div>
@@ -69,16 +99,13 @@
                             <i class="fa fa-envelope-o"></i>
                         </th>
                         <th class="col-md-1 col-sm-1">
+                            <i class="fa fa-shield-alt"></i>
+                        </th>
+                        <th class="col-md-1 col-sm-1">
                             <i class="fa fa-envelope-open-o"></i>
                         </th>
                         <th class="col-md-1 col-sm-1">
                             <i class="fa fa-mouse-pointer"></i>
-                        </th>
-                        <th class="col-md-1 col-sm-1">
-                            <i class="fa fa-exclamation-circle"></i>
-                        </th>
-                        <th class="col-md-1 col-sm-1">
-                            <i class="fa fa-bullhorn"></i>
                         </th>
                         <th class="col-md-1 col-sm-1">Status</th>
                         <th class="col-md-2 col-sm-2 no-sort"></th>

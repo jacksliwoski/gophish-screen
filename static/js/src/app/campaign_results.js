@@ -1,930 +1,844 @@
-var map = null
+// ─────────────────────────────────────────────────────────────
+// campaign_results.js  (unminified source, updated to match your HTML)
+// ─────────────────────────────────────────────────────────────
+
+var map = null;
 var doPoll = true;
+var setRefresh = null;
 
-// statuses is a helper map to point result statuses to ui classes
+// status → CSS class + colors for timeline icons
 var statuses = {
-    "Email Sent": {
-        color: "#1abc9c",
-        label: "label-success",
-        icon: "fa-envelope",
-        point: "ct-point-sent"
-    },
-    "Emails Sent": {
-        color: "#1abc9c",
-        label: "label-success",
-        icon: "fa-envelope",
-        point: "ct-point-sent"
-    },
-    "In progress": {
-        label: "label-primary"
-    },
-    "Queued": {
-        label: "label-info"
-    },
-    "Completed": {
-        label: "label-success"
-    },
-    "Email Opened": {
-        color: "#f9bf3b",
-        label: "label-warning",
-        icon: "fa-envelope-open",
-        point: "ct-point-opened"
-    },
-    "Clicked Link": {
-        color: "#F39C12",
-        label: "label-clicked",
-        icon: "fa-mouse-pointer",
-        point: "ct-point-clicked"
-    },
-    "Success": {
-        color: "#f05b4f",
-        label: "label-danger",
-        icon: "fa-exclamation",
-        point: "ct-point-clicked"
-    },
-    // not a status, but is used for the campaign timeline and user timeline
-    "Email Reported": {
-        color: "#45d6ef",
-        label: "label-info",
-        icon: "fa-bullhorn",
-        point: "ct-point-reported"
-    },
-    "Error": {
-        color: "#6c7a89",
-        label: "label-default",
-        icon: "fa-times",
-        point: "ct-point-error"
-    },
-    "Error Sending Email": {
-        color: "#6c7a89",
-        label: "label-default",
-        icon: "fa-times",
-        point: "ct-point-error"
-    },
-    "Submitted Data": {
-        color: "#f05b4f",
-        label: "label-danger",
-        icon: "fa-exclamation",
-        point: "ct-point-clicked"
-    },
-    "Unknown": {
-        color: "#6c7a89",
-        label: "label-default",
-        icon: "fa-question",
-        point: "ct-point-error"
-    },
-    "Sending": {
-        color: "#428bca",
-        label: "label-primary",
-        icon: "fa-spinner",
-        point: "ct-point-sending"
-    },
-    "Retrying": {
-        color: "#6c7a89",
-        label: "label-default",
-        icon: "fa-clock-o",
-        point: "ct-point-error"
-    },
-    "Scheduled": {
-        color: "#428bca",
-        label: "label-primary",
-        icon: "fa-clock-o",
-        point: "ct-point-sending"
-    },
-    "Campaign Created": {
-        label: "label-success",
-        icon: "fa-rocket"
-    }
-}
+    "Email Sent":          { color: "#1abc9c", label: "label-success", icon: "fa-envelope",       point: "ct-point-sent"     },
+    "Queued":              { label: "label-info" },
+    "In progress":         { label: "label-primary" },
+    "Completed":           { label: "label-success" },
+    "Email Opened":        { color: "#4CAF50", label: "label-warning", icon: "fa-envelope-open",  point: "ct-point-opened"   },
+    "Clicked Link":        { color: "#f05b4f", label: "label-clicked", icon: "fa-mouse-pointer", point: "ct-point-clicked"  },
+    "Email Reported":      { color: "#45d6ef", label: "label-info",    icon: "fa-bullhorn",      point: "ct-point-reported" },
+    "Error":               { color: "#6c7a89", label: "label-default", icon: "fa-times",         point: "ct-point-error"    },
+    "Error Sending Email": { color: "#6c7a89", label: "label-default", icon: "fa-times",         point: "ct-point-error"    },
+    "Submitted Data":      { color: "#f05b4f", label: "label-danger",  icon: "fa-exclamation",   point: "ct-point-clicked"  },
+    "Unknown":             { color: "#6c7a89", label: "label-default", icon: "fa-question",      point: "ct-point-error"    },
+    "Sending":             { color: "#428bca", label: "label-primary", icon: "fa-spinner",       point: "ct-point-sending"  },
+    "Retrying":            { color: "#6c7a89", label: "label-default", icon: "fa-clock-o",       point: "ct-point-error"    },
+    "Scheduled":           { color: "#428bca", label: "label-primary", icon: "fa-clock-o",       point: "ct-point-sending"  },
+    "Campaign Created":    { label: "label-success", icon: "fa-rocket" }
+};
 
-var statusMapping = {
-    "Email Sent": "sent",
-    "Email Opened": "opened",
-    "Clicked Link": "clicked",
-    "Submitted Data": "submitted_data",
-    "Email Reported": "reported",
-}
-
-// This is an underwhelming attempt at an enum
-// until I have time to refactor this appropriately.
-var progressListing = [
-    "Email Sent",
-    "Email Opened",
-    "Clicked Link",
-    "Submitted Data"
-]
-
+// we’ll store the loaded campaign’s data here
 var campaign = {
-    stats: {}  // will hold aggregated stats: sent, opened_real, opened_screened, clicked_real, clicked_screened
-}
-var bubbles = []
+    stats: {}
+};
 
-function dismiss() {
-    $("#modal\\.flashes").empty()
-    $("#modal").modal('hide')
-    $("#resultsTable").DataTable().clear().draw()
+/**
+ * Output debug text to confirm that this file has loaded.
+ */
+console.debug("👀 campaign_results.js → load() called");
+
+/**
+ * Create a <span class="label …"> … </span> for a status.
+ * If status is “Scheduled” or “Retrying,” attach a tooltip with the send date.
+ */
+function createStatusLabel(status, send_date) {
+    var cls = statuses[status] ? statuses[status].label : "label-default";
+    var labelHtml = '<span class="label ' + cls + '"';
+    if (status === "Scheduled" || status === "Retrying") {
+        labelHtml += ' data-toggle="tooltip" data-placement="top" data-html="true" ' +
+                     'title="Scheduled to send at ' + send_date + '"';
+    }
+    labelHtml += '>' + status + '</span>';
+    return labelHtml;
 }
 
-// Deletes a campaign after prompting the user
+/**
+ * Draw a Highcharts pie-chart with a big central number.
+ *   opts.elemId → the DIV ID
+ *   opts.title  → chart title
+ *   opts.data   → array of { name: "...", y: <percent>, count: <absolute> }
+ *   opts.colors → [primaryColor, greyColor]
+ */
+function renderPieChart(opts) {
+    if (!document.getElementById(opts.elemId)) {
+        return;
+    }
+    return Highcharts.chart(opts.elemId, {
+        chart: {
+            type: "pie",
+            events: {
+                load: function() {
+                    var chart = this,
+                        rend  = chart.renderer,
+                        pie   = chart.series[0],
+                        left  = chart.plotLeft + pie.center[0],
+                        top   = chart.plotTop + pie.center[1];
+
+                    this.innerText = rend.text(
+                        opts.data[0].count, left, top
+                    ).attr({
+                        "text-anchor": "middle",
+                        "font-size": "16px",
+                        "font-weight": "bold",
+                        "fill": opts.colors[0],
+                        "font-family": "Helvetica,Arial,sans-serif"
+                    }).add();
+                },
+                render: function() {
+                    this.innerText && this.innerText.attr({
+                        text: opts.data[0].count
+                    });
+                }
+            }
+        },
+        title: { text: opts.title },
+        plotOptions: {
+            pie: {
+                innerSize: "80%",
+                dataLabels: { enabled: false }
+            }
+        },
+        credits: { enabled: false },
+        tooltip: {
+            formatter: function() {
+                if (!this.key) { return false; }
+                return '<span style="color:' + this.color + '">●</span> ' +
+                       this.point.name + ": <b>" + this.y + "%</b><br/>";
+            }
+        },
+        series: [{
+            data: opts.data,
+            colors: opts.colors
+        }]
+    });
+}
+
+/**
+ * Render a Highcharts line timeline.
+ *   chartopts.data → [ { email: "...", message: "...", x: <epoch>, y: 1, marker: { fillColor: "<color>" } }, … ]
+ */
+function renderTimelineChart(chartopts) {
+    if (!document.getElementById("timeline_chart")) {
+        return;
+    }
+    return Highcharts.chart("timeline_chart", {
+        chart: {
+            zoomType: "x",
+            type: "line",
+            height: "200px"
+        },
+        title: { text: "Campaign Timeline" },
+        xAxis: {
+            type: "datetime",
+            dateTimeLabelFormats: {
+                second: "%l:%M:%S",
+                minute: "%l:%M",
+                hour:   "%l:%M",
+                day:    "%b %d, %Y",
+                week:   "%b %d, %Y",
+                month:  "%b %Y"
+            }
+        },
+        yAxis: {
+            visible: false,
+            min: 0,
+            max: 2,
+            tickInterval: 1,
+            labels: { enabled: false },
+            title:  { text: "" }
+        },
+        tooltip: {
+            formatter: function() {
+                return Highcharts.dateFormat(
+                    "%A, %b %d %l:%M:%S %P",
+                    new Date(this.x)
+                ) +
+                "<br>Event: " + this.point.message +
+                "<br>Email: <b>" + this.point.email + "</b>";
+            }
+        },
+        legend: { enabled: false },
+        plotOptions: {
+            series: {
+                marker: {
+                    enabled: true,
+                    symbol: "circle",
+                    radius: 3
+                },
+                cursor: "pointer"
+            },
+            line: {
+                states: {
+                    hover: { lineWidth: 1 }
+                }
+            }
+        },
+        credits: { enabled: false },
+        series: [{
+            data:       chartopts.data,
+            dashStyle:  "shortdash",
+            color:      "#cccccc",
+            lineWidth:  1,
+            turboThreshold: 0
+        }]
+    });
+}
+
+/**
+ * For each row’s “Details” in the DataTable, build the per-recipient timeline display.
+ * Input `data` looks like:
+ *   [ rid, "<i#caret>", first_name, last_name, email, position, status, reported, send_date ]
+ */
+function renderTimeline(data) {
+    var record = {
+        id:         data[0],
+        first_name: data[2],
+        last_name:  data[3],
+        email:      data[4],
+        position:   data[5],
+        status:     data[6],
+        reported:   data[7],
+        send_date:  data[8]
+    };
+
+    var resultsHtml = '<div class="timeline col-sm-12 well well-lg">' +
+        '<h6>Timeline for ' +
+            escapeHtml(record.first_name) + ' ' + escapeHtml(record.last_name) +
+        '</h6><span class="subtitle">Email: ' + escapeHtml(record.email) +
+        '<br>Result ID: ' + escapeHtml(record.id) +
+        '</span><div class="timeline-graph col-sm-6">';
+
+    $.each(campaign.timeline, function(i, event) {
+        if (!event.email || event.email !== record.email) {
+            return true;
+        }
+        resultsHtml +=
+            '<div class="timeline-entry">' +
+                '<div class="timeline-bar"></div>' +
+                '<div class="timeline-icon ' + statuses[event.message].label + '">' +
+                    '<i class="fa ' + statuses[event.message].icon + '"></i>' +
+                '</div>' +
+                '<div class="timeline-message">' + escapeHtml(event.message) +
+                    '<span class="timeline-date">' +
+                        moment.utc(event.time).local().format("MMMM Do YYYY h:mm:ss a") +
+                    '</span>';
+
+        if (event.details) {
+            var details = JSON.parse(event.details);
+
+            // If “Clicked Link” or “Submitted Data,” show device info
+            if (event.message === "Clicked Link" || event.message === "Submitted Data") {
+                var ua = UAParser(details.browser["user-agent"]);
+                var deviceString = '<div class="timeline-device-details">';
+                var deviceIcon = "laptop";
+                if (ua.device.type === "tablet" || ua.device.type === "mobile") {
+                    deviceIcon = ua.device.type;
+                }
+                var deviceVendor = "";
+                if (ua.device.vendor) {
+                    deviceVendor = ua.device.vendor.toLowerCase();
+                }
+                var deviceName = ua.os.name || "Unknown";
+                if (ua.os.name === "Mac OS") {
+                    deviceVendor = "apple";
+                } else if (ua.os.name === "Windows") {
+                    deviceVendor = "windows";
+                }
+                if (ua.os.version) {
+                    deviceName += " (OS Version: " + ua.os.version + ")";
+                }
+                deviceString +=
+                    '<div class="timeline-device-os"><span class="fa fa-stack">' +
+                        '<i class="fa fa-' + escapeHtml(deviceIcon) + ' fa-stack-2x"></i>' +
+                        '<i class="fa fa-vendor-icon fa-' + escapeHtml(deviceVendor) + ' fa-stack-1x"></i>' +
+                    "</span> " + escapeHtml(deviceName) + "</div>";
+
+                var deviceBrowser = ua.browser.name || "Unknown";
+                var browserIcon = ua.browser.name ? ua.browser.name.toLowerCase() : "info-circle";
+                if (browserIcon === "ie") {
+                    browserIcon = "internet-explorer";
+                }
+                var browserVersion = ua.browser.version ? "(Version: " + ua.browser.version + ")" : "";
+                var browserString = 
+                    '<div class="timeline-device-browser"><span class="fa fa-stack">' +
+                        '<i class="fa fa-' + escapeHtml(browserIcon) + ' fa-stack-1x"></i>' +
+                    "</span> " + deviceBrowser + " " + browserVersion +
+                    "</div>";
+
+                deviceString += browserString + "</div>";
+                resultsHtml += deviceString;
+            }
+
+            // If “Submitted Data,” show “Replay Credentials” button + details table
+            if (event.message === "Submitted Data") {
+                resultsHtml +=
+                    '<div class="timeline-replay-button">' +
+                        '<button onclick="replay(' + i + ')" class="btn btn-success">' +
+                            '<i class="fa fa-refresh"></i> Replay Credentials' +
+                        '</button>' +
+                    '</div>' +
+                    '<div class="timeline-event-details"><i class="fa fa-caret-right"></i> View Details</div>';
+
+                if (details.payload) {
+                    resultsHtml +=
+                        '<div class="timeline-event-results">' +
+                            '<table class="table table-condensed table-bordered table-striped">' +
+                            "<thead><tr><th>Parameter</th><th>Value(s)</th></tr></thead><tbody>";
+
+                    Object.keys(details.payload).forEach(function(param) {
+                        if (param === "rid") {
+                            return;
+                        }
+                        resultsHtml +=
+                            "<tr><td>" + escapeHtml(param) + "</td>" +
+                            "<td>" + escapeHtml(details.payload[param]) + "</td></tr>";
+                    });
+
+                    resultsHtml += "</tbody></table></div>";
+                }
+            }
+
+            // If error payload, show error details
+            if (details.error) {
+                resultsHtml +=
+                    '<div class="timeline-event-details"><i class="fa fa-caret-right"></i> View Details</div>' +
+                    '<div class="timeline-event-results">' +
+                        '<span class="label label-default">Error</span> ' + details.error +
+                    "</div>";
+            }
+        }
+
+        resultsHtml += "</div></div>";
+    });
+
+    // If this result is Scheduled/Retrying, add that at the bottom
+    if (record.status === "Scheduled" || record.status === "Retrying") {
+        resultsHtml +=
+            '<div class="timeline-entry">' +
+                '<div class="timeline-bar"></div>' +
+                '<div class="timeline-icon ' + statuses[record.status].label + '">' +
+                    '<i class="fa ' + statuses[record.status].icon + '"></i>' +
+                '</div>' +
+                '<div class="timeline-message">Scheduled to send at ' + record.send_date + "</div>" +
+            "</div>";
+    }
+
+    resultsHtml += "</div>";
+    return resultsHtml;
+}
+
+/**
+ * Replay a recipient’s “Submitted Data” by popping up a URL prompt and submitting a form.
+ */
+function replay(event_idx) {
+    var request = campaign.timeline[event_idx];
+    var details = JSON.parse(request.details);
+    var url = null;
+
+    var form = $("<form>").attr({ method: "POST", target: "_blank" });
+    Object.keys(details.payload).forEach(function(param) {
+        if (param === "rid") {
+            return;
+        }
+        if (param === "__original_url") {
+            url = details.payload[param];
+            return;
+        }
+        $("<input>").attr({ name: param }).val(details.payload[param]).appendTo(form);
+    });
+
+    Swal.fire({
+        title: "Where do you want the credentials submitted to?",
+        input: "text",
+        showCancelButton: true,
+        inputPlaceholder: "http://example.com/login",
+        inputValue: url || "",
+        inputValidator: function(value) {
+            return new Promise(function(resolve, reject) {
+                if (value) {
+                    resolve();
+                } else {
+                    reject("Invalid URL.");
+                }
+            });
+        }
+    }).then(function(result) {
+        if (result.value) {
+            url = result.value;
+            form.attr({ action: url });
+            form.appendTo("body").submit().remove();
+        }
+    });
+}
+
+/**
+ * Delete this campaign (after confirmation).
+ */
 function deleteCampaign() {
     Swal.fire({
         title: "Are you sure?",
-        text: "This will delete the campaign. This can't be undone!",
+        text: "This will delete the campaign. This can’t be undone!",
         type: "warning",
-        animation: false,
         showCancelButton: true,
         confirmButtonText: "Delete Campaign",
         confirmButtonColor: "#428bca",
         reverseButtons: true,
         allowOutsideClick: false,
-        showLoaderOnConfirm: true,
-        preConfirm: function () {
-            return new Promise(function (resolve, reject) {
-                api.campaignId.delete(campaign.id)
-                    .success(function (msg) {
-                        resolve()
-                    })
-                    .error(function (data) {
-                        reject(data.responseJSON.message)
-                    })
-            })
+        showLoaderOnConfirm: true
+    }).then(function(result) {
+        if (result.value) {
+            api.campaignId.delete(campaign.id)
+                .success(function(msg) {
+                    Swal.fire("Campaign Deleted!", "This campaign has been deleted!", "success");
+                    setTimeout(function() { window.location.href = "/campaigns"; }, 500);
+                })
+                .error(function(data) {
+                    Swal.fire("Error", data.responseJSON.message, "error");
+                });
         }
-    }).then(function (result) {
-        if(result.value){
-            Swal.fire(
-                'Campaign Deleted!',
-                'This campaign has been deleted!',
-                'success'
-            );
-        }
-        $('button:contains("OK")').on('click', function () {
-            location.href = '/campaigns'
-        })
-    })
+    });
 }
 
-// Completes a campaign after prompting the user
+/**
+ * Complete this campaign (stop further event processing).
+ */
 function completeCampaign() {
     Swal.fire({
         title: "Are you sure?",
         text: "Gophish will stop processing events for this campaign",
         type: "warning",
-        animation: false,
         showCancelButton: true,
         confirmButtonText: "Complete Campaign",
         confirmButtonColor: "#428bca",
         reverseButtons: true,
         allowOutsideClick: false,
         showLoaderOnConfirm: true
-    }).then(function (result) {
-        if (result.value){
-            Swal.fire(
-                'Campaign Completed!',
-                'This campaign has been completed!',
-                'success'
-            );
-            $('#complete_button')[0].disabled = true;
-            $('#complete_button').text('Completed!')
+    }).then(function(result) {
+        if (result.value) {
+            Swal.fire("Campaign Completed!", "This campaign has been completed!", "success");
+            $("#complete_button").prop("disabled", true).text("Completed!");
             doPoll = false;
         }
-    })
+    });
 }
 
-// Exports campaign results as a CSV file
+/**
+ * Export “results” or “events” to CSV.
+ */
 function exportAsCSV(scope) {
-    exportHTML = $("#exportButton").html()
-    var csvScope = null
-    var filename = campaign.name + ' - ' + capitalize(scope) + '.csv'
-    switch (scope) {
-        case "results":
-            csvScope = campaign.results
-            break;
-        case "events":
-            csvScope = campaign.timeline
-            break;
+    var exportHTML = $("#exportButton").html();
+    var dataToExport = null;
+    var filename = campaign.name + " - " + scope.charAt(0).toUpperCase() + scope.slice(1) + ".csv";
+
+    if (scope === "results") {
+        dataToExport = campaign.results;
+    } else if (scope === "events") {
+        dataToExport = campaign.timeline;
     }
-    if (!csvScope) {
-        return
+
+    if (!dataToExport) {
+        return;
     }
-    $("#exportButton").html('<i class="fa fa-spinner fa-spin"></i>')
-    var csvString = Papa.unparse(csvScope, {
-        'escapeFormulae': true
-    })
-    var csvData = new Blob([csvString], {
-        type: 'text/csv;charset=utf-8;'
-    });
+
+    $("#exportButton").html('<i class="fa fa-spinner fa-spin"></i>');
+    var csvString = Papa.unparse(dataToExport, { escapeFormulae: true });
+    var csvData = new Blob([csvString], { type: "text/csv;charset=utf-8;" });
+
     if (navigator.msSaveBlob) {
         navigator.msSaveBlob(csvData, filename);
     } else {
         var csvURL = window.URL.createObjectURL(csvData);
-        var dlLink = document.createElement('a');
+        var dlLink = document.createElement("a");
         dlLink.href = csvURL;
-        dlLink.setAttribute('download', filename)
-        document.body.appendChild(dlLink)
+        dlLink.setAttribute("download", filename);
+        document.body.appendChild(dlLink);
         dlLink.click();
-        document.body.removeChild(dlLink)
+        document.body.removeChild(dlLink);
     }
-    $("#exportButton").html(exportHTML)
-}
 
-function replay(event_idx) {
-    request = campaign.timeline[event_idx]
-    details = JSON.parse(request.details)
-    url = null
-    form = $('<form>').attr({
-        method: 'POST',
-        target: '_blank',
-    })
-    /* Create a form object and submit it */
-    $.each(Object.keys(details.payload), function (i, param) {
-        if (param == "rid") {
-            return true;
-        }
-        if (param == "__original_url") {
-            url = details.payload[param];
-            return true;
-        }
-        $('<input>').attr({
-            name: param,
-        }).val(details.payload[param]).appendTo(form);
-    })
-    /* Ensure we know where to send the user */
-    // Prompt for the URL
-    Swal.fire({
-        title: 'Where do you want the credentials submitted to?',
-        input: 'text',
-        showCancelButton: true,
-        inputPlaceholder: "http://example.com/login",
-        inputValue: url || "",
-        inputValidator: function (value) {
-            return new Promise(function (resolve, reject) {
-                if (value) {
-                    resolve();
-                } else {
-                    reject('Invalid URL.');
-                }
-            });
-        }
-    }).then(function (result) {
-        if (result.value){
-            url = result.value
-            submitForm()
-        }
-    })
-    return
-    submitForm()
-
-    function submitForm() {
-        form.attr({
-            action: url
-        })
-        form.appendTo('body').submit().remove()
-    }
+    $("#exportButton").html(exportHTML);
 }
 
 /**
- * Returns an HTML string that displays the OS and browser that clicked the link
- * or submitted credentials.
- * 
- * @param {object} event_details - The "details" parameter for a campaign
- *  timeline event
- * 
+ * Called when “Refresh” is clicked: hide the button, show spinner, call poll(), then queue next in 60s.
  */
-var renderDevice = function (event_details) {
-    var ua = UAParser(details.browser['user-agent'])
-    var detailsString = '<div class="timeline-device-details">'
-
-    var deviceIcon = 'laptop'
-    if (ua.device.type) {
-        if (ua.device.type == 'tablet' || ua.device.type == 'mobile') {
-            deviceIcon = ua.device.type
-        }
-    }
-
-    var deviceVendor = ''
-    if (ua.device.vendor) {
-        deviceVendor = ua.device.vendor.toLowerCase()
-        if (deviceVendor == 'microsoft') deviceVendor = 'windows'
-    }
-
-    var deviceName = 'Unknown'
-    if (ua.os.name) {
-        deviceName = ua.os.name
-        if (deviceName == "Mac OS") {
-            deviceVendor = 'apple'
-        } else if (deviceName == "Windows") {
-            deviceVendor = 'windows'
-        }
-        if (ua.device.vendor && ua.device.model) {
-            deviceName = ua.device.vendor + ' ' + ua.device.model
-        }
-    }
-
-    if (ua.os.version) {
-        deviceName = deviceName + ' (OS Version: ' + ua.os.version + ')'
-    }
-
-    deviceString = '<div class="timeline-device-os"><span class="fa fa-stack">' +
-        '<i class="fa fa-' + escapeHtml(deviceIcon) + ' fa-stack-2x"></i>' +
-        '<i class="fa fa-vendor-icon fa-' + escapeHtml(deviceVendor) + ' fa-stack-1x"></i>' +
-        '</span> ' + escapeHtml(deviceName) + '</div>'
-
-    detailsString += deviceString
-
-    var deviceBrowser = 'Unknown'
-    var browserIcon = 'info-circle'
-    var browserVersion = ''
-
-    if (ua.browser && ua.browser.name) {
-        deviceBrowser = ua.browser.name
-        // Handle the "mobile safari" case
-        deviceBrowser = deviceBrowser.replace('Mobile ', '')
-        if (deviceBrowser) {
-            browserIcon = deviceBrowser.toLowerCase()
-            if (browserIcon == 'ie') browserIcon = 'internet-explorer'
-        }
-        browserVersion = '(Version: ' + ua.browser.version + ')'
-    }
-
-    var browserString = '<div class="timeline-device-browser"><span class="fa fa-stack">' +
-        '<i class="fa fa-' + escapeHtml(browserIcon) + ' fa-stack-1x"></i></span> ' +
-        deviceBrowser + ' ' + browserVersion + '</div>'
-
-    detailsString += browserString
-    detailsString += '</div>'
-    return detailsString
-}
-
-function renderTimeline(data) {
-    record = {
-        "id": data[0],
-        "first_name": data[2],
-        "last_name": data[3],
-        "email": data[4],
-        "position": data[5],
-        "status": data[6],
-        "reported": data[7],
-        "send_date": data[8]
-    }
-    results = '<div class="timeline col-sm-12 well well-lg">' +
-        '<h6>Timeline for ' + escapeHtml(record.first_name) + ' ' + escapeHtml(record.last_name) +
-        '</h6><span class="subtitle">Email: ' + escapeHtml(record.email) +
-        '<br>Result ID: ' + escapeHtml(record.id) + '</span>' +
-        '<div class="timeline-graph col-sm-6">'
-    $.each(campaign.timeline, function (i, event) {
-        if (!event.email || event.email == record.email) {
-            // Add the event
-            results += '<div class="timeline-entry">' +
-                '    <div class="timeline-bar"></div>'
-            results +=
-                '    <div class="timeline-icon ' + statuses[event.message].label + '">' +
-                '    <i class="fa ' + statuses[event.message].icon + '"></i></div>' +
-                '    <div class="timeline-message">' + escapeHtml(event.message) +
-                '    <span class="timeline-date">' + moment.utc(event.time).local().format('MMMM Do YYYY h:mm:ss a') + '</span>'
-            if (event.details) {
-                details = JSON.parse(event.details)
-                if (event.message == "Clicked Link" || event.message == "Submitted Data") {
-                    deviceView = renderDevice(details)
-                    if (deviceView) {
-                        results += deviceView
-                    }
-                }
-                if (event.message == "Submitted Data") {
-                    results += '<div class="timeline-replay-button"><button onclick="replay(' + i + ')" class="btn btn-success">'
-                    results += '<i class="fa fa-refresh"></i> Replay Credentials</button></div>'
-                    results += '<div class="timeline-event-details"><i class="fa fa-caret-right"></i> View Details</div>'
-                }
-                if (details.payload) {
-                    results += '<div class="timeline-event-results">'
-                    results += '    <table class="table table-condensed table-bordered table-striped">'
-                    results += '        <thead><tr><th>Parameter</th><th>Value(s)</tr></thead><tbody>'
-                    $.each(Object.keys(details.payload), function (i, param) {
-                        if (param == "rid") {
-                            return true;
-                        }
-                        results += '    <tr>'
-                        results += '        <td>' + escapeHtml(param) + '</td>'
-                        results += '        <td>' + escapeHtml(details.payload[param]) + '</td>'
-                        results += '    </tr>'
-                    })
-                    results += '       </tbody></table>'
-                    results += '</div>'
-                }
-                if (details.error) {
-                    results += '<div class="timeline-event-details"><i class="fa fa-caret-right"></i> View Details</div>'
-                    results += '<div class="timeline-event-results">'
-                    results += '<span class="label label-default">Error</span> ' + details.error
-                    results += '</div>'
-                }
-            }
-            results += '</div></div>'
-        }
-    })
-    // Add the scheduled send event at the bottom
-    if (record.status == "Scheduled" || record.status == "Retrying") {
-        results += '<div class="timeline-entry">' +
-            '    <div class="timeline-bar"></div>'
-        results +=
-            '    <div class="timeline-icon ' + statuses[record.status].label + '">' +
-            '    <i class="fa ' + statuses[record.status].icon + '"></i></div>' +
-            '    <div class="timeline-message">' + "Scheduled to send at " + record.send_date + '</span>'
-    }
-    results += '</div></div>'
-    return results
-}
-
-var renderTimelineChart = function (chartopts) {
-    return Highcharts.chart('timeline_chart', {
-        chart: {
-            zoomType: 'x',
-            type: 'line',
-            height: "200px"
-        },
-        title: {
-            text: 'Campaign Timeline'
-        },
-        xAxis: {
-            type: 'datetime',
-            dateTimeLabelFormats: {
-                second: '%l:%M:%S',
-                minute: '%l:%M',
-                hour: '%l:%M',
-                day: '%b %d, %Y',
-                week: '%b %d, %Y',
-                month: '%b %Y'
-            }
-        },
-        yAxis: {
-            min: 0,
-            max: 2,
-            visible: false,
-            tickInterval: 1,
-            labels: {
-                enabled: false
-            },
-            title: {
-                text: ""
-            }
-        },
-        tooltip: {
-            formatter: function () {
-                return Highcharts.dateFormat('%A, %b %d %l:%M:%S %P', new Date(this.x)) +
-                    '<br>Event: ' + this.point.message + '<br>Email: <b>' + this.point.email + '</b>'
-            }
-        },
-        legend: {
-            enabled: false
-        },
-        plotOptions: {
-            series: {
-                marker: {
-                    enabled: true,
-                    symbol: 'circle',
-                    radius: 3
-                },
-                cursor: 'pointer',
-            },
-            line: {
-                states: {
-                    hover: {
-                        lineWidth: 1
-                    }
-                }
-            }
-        },
-        credits: {
-            enabled: false
-        },
-        series: [{
-            data: chartopts['data'],
-            dashStyle: "shortdash",
-            color: "#cccccc",
-            lineWidth: 1,
-            turboThreshold: 0
-        }]
-    })
-}
-
-/* Renders a pie chart using the provided chartopts */
-var renderPieChart = function (chartopts) {
-    return Highcharts.chart(chartopts['elemId'], {
-        chart: {
-            type: 'pie',
-            events: {
-                load: function () {
-                    var chart = this,
-                        rend = chart.renderer,
-                        pie = chart.series[0],
-                        left = chart.plotLeft + pie.center[0],
-                        top = chart.plotTop + pie.center[1];
-                    this.innerText = rend.text(chartopts['data'][0].count, left, top).
-                    attr({
-                        'text-anchor': 'middle',
-                        'font-size': '24px',
-                        'font-weight': 'bold',
-                        'fill': chartopts['colors'][0],
-                        'font-family': 'Helvetica,Arial,sans-serif'
-                    }).add();
-                },
-                render: function () {
-                    this.innerText.attr({
-                        text: chartopts['data'][0].count
-                    })
-                }
-            }
-        },
-        title: {
-            text: chartopts['title']
-        },
-        plotOptions: {
-            pie: {
-                innerSize: '80%',
-                dataLabels: {
-                    enabled: false
-                }
-            }
-        },
-        credits: {
-            enabled: false
-        },
-        tooltip: {
-            formatter: function () {
-                if (this.key == undefined) {
-                    return false
-                }
-                return '<span style="color:' + this.color + '">\u25CF</span>' + this.point.name + ': <b>' + this.y + '%</b><br/>'
-            }
-        },
-        series: [{
-            data: chartopts['data'],
-            colors: chartopts['colors'],
-        }]
-    })
-}
-
-/* Updates the bubbles on the map
-
-@param {campaign.result[]} results - The campaign results to process
-*/
-var updateMap = function (results) {
-    if (!map) {
-        return
-    }
-    bubbles = []
-    $.each(campaign.results, function (i, result) {
-        // Check that it wasn't an internal IP
-        if (result.latitude == 0 && result.longitude == 0) {
-            return true;
-        }
-        newIP = true
-        $.each(bubbles, function (i, bubble) {
-            if (bubble.ip == result.ip) {
-                bubbles[i].radius += 1
-                newIP = false
-                return false
-            }
-        })
-        if (newIP) {
-            bubbles.push({
-                latitude: result.latitude,
-                longitude: result.longitude,
-                name: result.ip,
-                fillKey: "point",
-                radius: 2
-            })
-        }
-    })
-    map.bubbles(bubbles)
-}
-
-/**
- * Creates a status label for use in the results datatable
- * @param {string} status 
- * @param {moment(datetime)} send_date 
- */
-function createStatusLabel(status, send_date) {
-    var label = statuses[status].label || "label-default";
-    var statusColumn = "<span class=\"label " + label + "\">" + status + "</span>"
-    // Add the tooltip if the email is scheduled to be sent
-    if (status == "Scheduled" || status == "Retrying") {
-        var sendDateMessage = "Scheduled to send at " + send_date
-        statusColumn = "<span class=\"label " + label + "\" data-toggle=\"tooltip\" data-placement=\"top\" data-html=\"true\" title=\"" + sendDateMessage + "\">" + status + "</span>"
-    }
-    return statusColumn
-}
-
-/* poll - Queries the API and updates the UI with the results
- *
- * Updates:
- * * Timeline Chart
- * * Email (Donut) Chart
- * * Map Bubbles
- * * Datatables
- */
-function poll() {
-    api.campaignId.results(campaign.id)
-        .success(function (c) {
-            campaign = c
-
-            // Fetch stats for this campaign
-            api.campaignId.stats(campaign.id)
-                .success(function (stats) {
-                    // stats should include: sent, opened_real, opened_screened, clicked_real, clicked_screened
-                    campaign.stats = stats
-
-                    /* Update the timeline */
-                    var timeline_series_data = []
-                    $.each(campaign.timeline, function (i, event) {
-                        var event_date = moment.utc(event.time).local()
-                        timeline_series_data.push({
-                            email: event.email,
-                            message: event.message,
-                            x: event_date.valueOf(),
-                            y: 1,
-                            marker: {
-                                fillColor: statuses[event.message].color
-                            }
-                        })
-                    })
-                    var timeline_chart = $("#timeline_chart").highcharts()
-                    timeline_chart.series[0].update({
-                        data: timeline_series_data
-                    })
-
-                    /* Update the results donut charts */
-
-                    // 1) Opened Emails: Real / Screened / Not Opened
-                    var totalSent = campaign.stats.sent
-                    var realOpens = campaign.stats.opened_real
-                    var screenedOpens = campaign.stats.opened_screened
-                    var notOpened = totalSent - (realOpens + screenedOpens)
-                    var opened_data = [
-                        { name: "Real Opens", y: Math.floor((realOpens / totalSent) * 100), count: realOpens },
-                        { name: "Screened", y: Math.floor((screenedOpens / totalSent) * 100), count: screenedOpens },
-                        { name: "Not Opened", y: Math.floor((notOpened / totalSent) * 100), count: notOpened }
-                    ]
-                    renderPieChart({
-                        elemId: 'opened_chart',
-                        title: 'Email Opens',
-                        data: opened_data,
-                        colors: ['#4CAF50', '#FF9800', '#E0E0E0']
-                    })
-
-                    // 2) Clicked Links: Real / Screened / Not Clicked
-                    var realClicks = campaign.stats.clicked_real
-                    var screenedClicks = campaign.stats.clicked_screened
-                    var notClicked = totalSent - (realClicks + screenedClicks)
-                    var clicked_data = [
-                        { name: "Real Clicks", y: Math.floor((realClicks / totalSent) * 100), count: realClicks },
-                        { name: "Screened", y: Math.floor((screenedClicks / totalSent) * 100), count: screenedClicks },
-                        { name: "Not Clicked", y: Math.floor((notClicked / totalSent) * 100), count: notClicked }
-                    ]
-                    renderPieChart({
-                        elemId: 'clicked_chart',
-                        title: 'Link Clicks',
-                        data: clicked_data,
-                        colors: ['#4CAF50', '#FF9800', '#E0E0E0']
-                    })
-
-                    /* Update the datatable */
-                    var resultsTable = $("#resultsTable").DataTable()
-                    resultsTable.rows().every(function (i, tableLoop, rowLoop) {
-                        var row = this.row(i)
-                        var rowData = row.data()
-                        // rowData has 9 elements: [0=id, 1=caret_icon, 2=first_name, 3=last_name, 4=email, 5=position, 6=status, 7=reported, 8=send_date]
-                        var rid = rowData[0]
-                        $.each(campaign.results, function (j, result) {
-                            if (result.id == rid) {
-                                // Update hidden send_date in column 8, reported (col 7), and status (col 6)
-                                rowData[8] = moment(result.send_date).format('MMMM Do YYYY, h:mm:ss a')
-                                rowData[7] = result.reported
-                                rowData[6] = result.status
-                                resultsTable.row(i).data(rowData)
-                                if (row.child.isShown()) {
-                                    $(row.node()).find("#caret").removeClass("fa-caret-right")
-                                    $(row.node()).find("#caret").addClass("fa-caret-down")
-                                    row.child(renderTimeline(row.data()))
-                                }
-                                return false
-                            }
-                        })
-                    })
-                    resultsTable.draw(false)
-
-                    /* Update the map information */
-                    updateMap(campaign.results)
-
-                    $('[data-toggle="tooltip"]').tooltip()
-                    $("#refresh_message").hide()
-                    $("#refresh_btn").show()
-                }) // end stats success
-                .error(function () {
-                    console.error("Failed to fetch campaign stats");
-                })
-        })
-}
-
-function load() {
-    campaign.id = window.location.pathname.split('/').slice(-1)[0]
-    var use_map = JSON.parse(localStorage.getItem('gophish.use_map'))
-    api.campaignId.results(campaign.id)
-        .success(function (c) {
-            campaign = c
-            if (campaign) {
-                $("title").text(c.name + " - Gophish")
-                $("#loading").hide()
-                $("#campaignResults").show()
-                // Set the title
-                $("#page-title").text("Results for " + c.name)
-                if (c.status == "Completed") {
-                    $('#complete_button')[0].disabled = true;
-                    $('#complete_button').text('Completed!');
-                    doPoll = false;
-                }
-                // Setup viewing the details of a result
-                $("#resultsTable").on("click", ".timeline-event-details", function () {
-                    // Show the parameters
-                    payloadResults = $(this).parent().find(".timeline-event-results")
-                    if (payloadResults.is(":visible")) {
-                        $(this).find("i").removeClass("fa-caret-down")
-                        $(this).find("i").addClass("fa-caret-right")
-                        payloadResults.hide()
-                    } else {
-                        $(this).find("i").removeClass("fa-caret-right")
-                        $(this).find("i").addClass("fa-caret-down")
-                        payloadResults.show()
-                    }
-                })
-                // Setup the results table (9 columns total)
-                var resultsTable = $("#resultsTable").DataTable({
-                    destroy: true,
-                    "order": [
-                        [2, "asc"]
-                    ],
-                    columnDefs: [
-                        {
-                            orderable: false,
-                            targets: "no-sort"
-                        },
-                        {
-                            className: "details-control",
-                            "targets": [1]
-                        },
-                        {
-                            "visible": false,
-                            "targets": [0, 8]  // hide both the ID (col 0) and the hidden "SendDate" (col 8)
-                        },
-                        {
-                            "render": function (data, type, row) {
-                                // data = status, row[8] = send_date
-                                return createStatusLabel(data, row[8])
-                            },
-                            "targets": [6]  // status column
-                        },
-                        {
-                            className: "text-center",
-                            "render": function (reported, type, row) {
-                                if (type == "display") {
-                                    if (reported) {
-                                        return "<i class='fa fa-check-circle text-center text-success'></i>"
-                                    }
-                                    return "<i role='button' class='fa fa-times-circle text-center text-muted' onclick='report_mail(\"" + row[0] + "\", \"" + campaign.id + "\");'></i>"
-                                }
-                                return reported
-                            },
-                            "targets": [7]  // reported column
-                        }
-                    ]
-                });
-                // Populate the table: 9 columns per row
-                resultsTable.clear();
-                $.each(campaign.results, function (i, result) {
-                    resultsTable.row.add([
-                        result.id,                                   // col 0: Result ID
-                        "<i id=\"caret\" class=\"fa fa-caret-right\"></i>", // col 1: expand/collapse icon
-                        escapeHtml(result.first_name) || "",         // col 2: First Name
-                        escapeHtml(result.last_name) || "",          // col 3: Last Name
-                        escapeHtml(result.email) || "",              // col 4: Email
-                        escapeHtml(result.position) || "",           // col 5: Position
-                        result.status,                               // col 6: Status
-                        result.reported,                             // col 7: Reported (true/false)
-                        moment(result.send_date).format('MMMM Do YYYY, h:mm:ss a') // col 8: hidden send_date
-                    ])
-                })
-                resultsTable.draw();
-                // Setup tooltips
-                $('[data-toggle="tooltip"]').tooltip()
-                // Setup the individual timelines
-                $('#resultsTable tbody').on('click', 'td.details-control', function () {
-                    var tr = $(this).closest('tr');
-                    var row = resultsTable.row(tr);
-                    if (row.child.isShown()) {
-                        // This row is already open - close it
-                        row.child.hide();
-                        tr.removeClass('shown');
-                        $(this).find("i").removeClass("fa-caret-down")
-                        $(this).find("i").addClass("fa-caret-right")
-                    } else {
-                        // Open this row
-                        $(this).find("i").removeClass("fa-caret-right")
-                        $(this).find("i").addClass("fa-caret-down")
-                        row.child(renderTimeline(row.data())).show();
-                        tr.addClass('shown');
-                    }
-                });
-                // Setup the graphs after fetching stats (in poll())
-                poll()
-
-                if (use_map) {
-                    $("#resultsMapContainer").show()
-                    map = new Datamap({
-                        element: document.getElementById("resultsMap"),
-                        responsive: true,
-                        fills: {
-                            defaultFill: "#ffffff",
-                            point: "#283F50"
-                        },
-                        geographyConfig: {
-                            highlightFillColor: "#1abc9c",
-                            borderColor: "#283F50"
-                        },
-                        bubblesConfig: {
-                            borderColor: "#283F50"
-                        }
-                    });
-                }
-                updateMap(campaign.results)
-            }
-        })
-        .error(function () {
-            $("#loading").hide()
-            errorFlash("Campaign not found!")
-        })
-}
-
-var setRefresh
-
 function refresh() {
     if (!doPoll) {
         return;
     }
-    $("#refresh_message").show()
-    $("#refresh_btn").hide()
-    poll()
-    clearTimeout(setRefresh)
-    setRefresh = setTimeout(refresh, 60000)
-};
+    $("#refresh_message").show();
+    $("#refresh_btn").hide();
+    poll();
+    clearTimeout(setRefresh);
+    setRefresh = setTimeout(refresh, 60000);
+}
 
+/**
+ * “Report” a recipient (flag as reported).
+ */
 function report_mail(rid, cid) {
     Swal.fire({
         title: "Are you sure?",
         text: "This result will be flagged as reported (RID: " + rid + ")",
         type: "question",
-        animation: false,
         showCancelButton: true,
         confirmButtonText: "Continue",
         confirmButtonColor: "#428bca",
         reverseButtons: true,
         allowOutsideClick: false,
         showLoaderOnConfirm: true
-    }).then(function (result) {
-        if (result.value){
-            api.campaignId.get(cid).success((function(c) {
-                report_url = new URL(c.url)
-                report_url.pathname = '/report'
-                report_url.search = "?rid=" + rid 
+    }).then(function(result) {
+        if (result.value) {
+            api.campaignId.get(cid).success(function(c) {
+                var report_url = new URL(c.url);
+                report_url.pathname = "/report";
+                report_url.search = "?rid=" + rid;
                 fetch(report_url)
-                .then(response => {
-                    if (!response.ok) {
-                        throw new Error(`HTTP error! Status: ${response.status}`);
-                    }
-                    refresh();
-                })
-                .catch(error => {
-                    let errorMessage = error.message;
-                    if (error.message === "Failed to fetch") {
-                        errorMessage = "This might be due to Mixed Content issues or network problems.";
-                    }
-                    Swal.fire({
-                        title: 'Error',
-                        text: errorMessage,
-                        type: 'error',
-                        confirmButtonText: 'Close'
+                    .then(function(response) {
+                        if (!response.ok) {
+                            throw new Error("HTTP error! Status: " + response.status);
+                        }
+                        refresh();
+                    })
+                    .catch(function(error) {
+                        var errMsg = (error.message === "Failed to fetch")
+                            ? "This might be due to Mixed Content or network issues."
+                            : error.message;
+                        Swal.fire({ title: "Error", text: errMsg, type: "error", confirmButtonText: "Close" });
                     });
-                });
-            }));
+            });
         }
-    })
+    });
 }
 
-$(document).ready(function () {
-    Highcharts.setOptions({
-        global: {
-            useUTC: false
-        }
-    })
-    load();
+/**
+ * “poll” queries /campaigns/:id/results and /campaigns/:id/stats, then:
+ *   • Updates the timeline chart
+ *   • Updates all four donuts
+ *   • Updates the Results DataTable
+ *   • Updates the Map bubbles
+ */
+function poll() {
+    api.campaignId.results(campaign.id)
+        .success(function(c) {
+            campaign = c;
 
-    // Start the polling loop
-    setRefresh = setTimeout(refresh, 60000)
-})
+            api.campaignId.stats(campaign.id)
+                .success(function(stats) {
+                    campaign.stats = stats;
+
+                    // ─── Update Timeline Chart ───
+                    if ($("#timeline_chart").length > 0) {
+                        var timeline_series_data = [];
+                        $.each(campaign.timeline, function(i, event) {
+                            var event_date = moment.utc(event.time).local();
+                            timeline_series_data.push({
+                                email:   event.email,
+                                message: event.message,
+                                x:       event_date.valueOf(),
+                                y:       1,
+                                marker: { fillColor: statuses[event.message] ? statuses[event.message].color : "#cccccc" }
+                            });
+                        });
+                        var timelineChart = $("#timeline_chart").highcharts();
+                        if (timelineChart && timelineChart.series.length) {
+                            timelineChart.series[0].update({ data: timeline_series_data });
+                        }
+                    }
+
+                    // ─── Update Four Donuts ───
+                    var totalSent      = campaign.stats.sent || 0;
+                    var realOpens      = campaign.stats.opened_real || 0;
+                    var screenedOpens  = campaign.stats.opened_screened || 0;
+                    var realClicks     = campaign.stats.clicked_real || 0;
+                    var screenedClicks = campaign.stats.clicked_screened || 0;
+                    var denominator    = (totalSent > 0) ? totalSent : 1;
+
+                    // 1) Email Sent donut
+                    if ($("#sent_chart").length > 0) {
+                        var sentPct = Math.floor((totalSent / denominator) * 100);
+                        renderPieChart({
+                            elemId: "sent_chart",
+                            title:  "Email Sent",
+                            data: [
+                                { name: "Sent", y: sentPct, count: totalSent },
+                                { name: "", y: 100 - sentPct }
+                            ],
+                            colors: ["#1abc9c", "#dddddd"]
+                        });
+                    }
+
+                    // 2) Email Screened donut (combine screened Opens & Clicks)
+                    if ($("#screened_chart").length > 0) {
+                        var screenedCount = Math.max(screenedOpens, screenedClicks);
+                        var screenedPct   = Math.floor((screenedCount / denominator) * 100);
+                        renderPieChart({
+                            elemId: "screened_chart",
+                            title:  "Email Screened",
+                            data: [
+                                { name: "Screened", y: screenedPct, count: screenedCount },
+                                { name: "", y: 100 - screenedPct }
+                            ],
+                            colors: ["#FF9800", "#dddddd"]
+                        });
+                    }
+
+                    // 3) Email Opened (Real) donut
+                    if ($("#opened_chart").length > 0) {
+                        var roPct = Math.floor((realOpens / denominator) * 100);
+                        renderPieChart({
+                            elemId: "opened_chart",
+                            title:  "Email Opened",
+                            data: [
+                                { name: "Real Opens", y: roPct, count: realOpens },
+                                { name: "", y: 100 - roPct }
+                            ],
+                            colors: ["#4CAF50", "#dddddd"]
+                        });
+                    }
+
+                    // 4) Link Clicked (Real) donut
+                    if ($("#clicked_chart").length > 0) {
+                        var rcPct = Math.floor((realClicks / denominator) * 100);
+                        renderPieChart({
+                            elemId: "clicked_chart",
+                            title:  "Link Clicked",
+                            data: [
+                                { name: "Real Clicks", y: rcPct, count: realClicks },
+                                { name: "", y: 100 - rcPct }
+                            ],
+                            colors: ["#f05b4f", "#dddddd"]
+                        });
+                    }
+
+                    // ─── Update Details DataTable ───
+                    if ($("#resultsTable").length > 0) {
+                        var resultsTable = $("#resultsTable").DataTable();
+                        resultsTable.rows().every(function(rowIdx, tableLoop, rowLoop) {
+                            var rowData = this.data();
+                            var rid = rowData[0];
+
+                            $.each(campaign.results, function(j, result) {
+                                if (result.id == rid) {
+                                    rowData[6] = result.status;
+                                    rowData[7] = result.reported;
+                                    rowData[8] = moment(result.send_date).format("MMMM Do YYYY, h:mm:ss a");
+                                    resultsTable.row(rowIdx).data(rowData);
+                                    if (row.child.isShown()) {
+                                        $(row.node()).find("#caret")
+                                            .removeClass("fa-caret-right")
+                                            .addClass("fa-caret-down");
+                                        row.child(renderTimeline(row.data())).show();
+                                    }
+                                    return false;
+                                }
+                            });
+                        });
+                        resultsTable.draw(false);
+                    }
+
+                    // ─── Update Map Bubbles ───
+                    if (map) {
+                        var bubbles = [];
+                        $.each(campaign.results, function(i, result) {
+                            if (result.latitude == 0 && result.longitude == 0) {
+                                return true;
+                            }
+                            var found = false;
+                            for (var k = 0; k < bubbles.length; k++) {
+                                if (bubbles[k].name === result.ip) {
+                                    bubbles[k].radius += 1;
+                                    found = true;
+                                    break;
+                                }
+                            }
+                            if (!found) {
+                                bubbles.push({
+                                    latitude:  result.latitude,
+                                    longitude: result.longitude,
+                                    name:      result.ip,
+                                    fillKey:   "point",
+                                    radius:    2
+                                });
+                            }
+                        });
+                        map.bubbles(bubbles);
+                    }
+
+                    // Re-enable tooltip & Refresh button
+                    $('[data-toggle="tooltip"]').tooltip();
+                    $("#refresh_message").hide();
+                    $("#refresh_btn").show();
+                })
+                .error(function() {
+                    console.error("Failed to fetch campaign stats");
+                });
+        });
+}
+
+/**
+ * Called on initial load:
+ *  • Fetch /campaigns/:id/results
+ *  • Hide spinner, show content
+ *  • Build DataTable, call renderTimelineChart(), draw map, then poll()
+ */
+function load() {
+    // Pick up campaign ID from URL
+    campaign.id = window.location.pathname.split("/").slice(-1)[0];
+
+    api.campaignId.results(campaign.id)
+        .success(function(c) {
+            campaign = c;
+
+            // Update <title>, hide spinner, show campaignResults
+            $("title").text(campaign.name + " - Gophish");
+            $("#loading").hide();
+            $("#campaignResults").show();
+
+            // If campaign already “Completed,” disable Complete button
+            if (campaign.status === "Completed") {
+                $("#complete_button").prop("disabled", true).text("Completed!");
+                doPoll = false;
+            }
+
+            // ─── Build “Details” DataTable ───
+            if ($("#resultsTable").length > 0) {
+                var resultsTable = $("#resultsTable").DataTable({
+                    destroy: true,
+                    order: [ [2, "asc"] ],
+                    columnDefs: [
+                        { orderable: false, targets: "no-sort" },
+                        { className: "details-control", targets: [1] },
+                        { visible: false, targets: [0, 8] },
+                        {
+                            render: function(data, type, row) {
+                                return createStatusLabel(data, row[8]);
+                            },
+                            targets: [6]
+                        },
+                        {
+                            className: "text-center",
+                            render: function(reported, type, row) {
+                                if (type === "display") {
+                                    if (reported) {
+                                        return "<i class='fa fa-check-circle text-success'></i>";
+                                    }
+                                    return "<i role='button' class='fa fa-times-circle text-muted' " +
+                                           "onclick='report_mail(\"" + row[0] + "\", \"" + campaign.id + "\");'></i>";
+                                }
+                                return reported;
+                            },
+                            targets: [7]
+                        }
+                    ]
+                });
+
+                resultsTable.clear();
+                $.each(campaign.results, function(i, result) {
+                    resultsTable.row.add([
+                        result.id,
+                        "<i id='caret' class='fa fa-caret-right'></i>",
+                        escapeHtml(result.first_name) || "",
+                        escapeHtml(result.last_name)  || "",
+                        escapeHtml(result.email)      || "",
+                        escapeHtml(result.position)   || "",
+                        result.status,
+                        result.reported,
+                        moment(result.send_date).format("MMMM Do YYYY, h:mm:ss a")
+                    ]);
+                });
+                resultsTable.draw();
+
+                // Toggle each row’s child-timeline on click
+                $("#resultsTable tbody").on("click", "td.details-control", function() {
+                    var tr = $(this).closest("tr");
+                    var row = resultsTable.row(tr);
+
+                    if (row.child.isShown()) {
+                        row.child.hide();
+                        tr.removeClass("shown");
+                        $(this).find("i").removeClass("fa-caret-down").addClass("fa-caret-right");
+                    } else {
+                        $(this).find("i").removeClass("fa-caret-right").addClass("fa-caret-down");
+                        row.child(renderTimeline(row.data())).show();
+                        tr.addClass("shown");
+                    }
+                });
+
+                $('[data-toggle="tooltip"]').tooltip();
+            }
+
+            // ─── Draw initial Timeline Chart ───
+            if ($("#timeline_chart").length > 0) {
+                var timeline_data = [];
+                $.each(campaign.timeline, function(i, event) {
+                    var dt = moment.utc(event.time).local();
+                    timeline_data.push({
+                        email:   event.email,
+                        message: event.message,
+                        x:       dt.valueOf(),
+                        y:       1,
+                        marker: { fillColor: statuses[event.message] ? statuses[event.message].color : "#cccccc" }
+                    });
+                });
+                renderTimelineChart({ data: timeline_data });
+            }
+
+            // ─── Initialize Map (if enabled) ───
+            var use_map = JSON.parse(localStorage.getItem("gophish.use_map"));
+            if (use_map && $("#resultsMap").length > 0) {
+                $("#resultsMapContainer").show();
+                map = new Datamap({
+                    element: document.getElementById("resultsMap"),
+                    responsive: true,
+                    fills: {
+                        defaultFill: "#ffffff",
+                        point:       "#283F50"
+                    },
+                    geographyConfig: {
+                        highlightFillColor: "#1abc9c",
+                        borderColor:        "#283F50"
+                    },
+                    bubblesConfig: {
+                        borderColor: "#283F50"
+                    }
+                });
+
+                // Draw initial bubbles
+                var bubbles = [];
+                $.each(campaign.results, function(i, result) {
+                    if (result.latitude == 0 && result.longitude == 0) return true;
+                    var found = false;
+                    for (var k = 0; k < bubbles.length; k++) {
+                        if (bubbles[k].name === result.ip) {
+                            bubbles[k].radius += 1;
+                            found = true;
+                            break;
+                        }
+                    }
+                    if (!found) {
+                        bubbles.push({
+                            latitude:  result.latitude,
+                            longitude: result.longitude,
+                            name:      result.ip,
+                            fillKey:   "point",
+                            radius:    2
+                        });
+                    }
+                });
+                map.bubbles(bubbles);
+            }
+
+            // ─── Finally, start polling ───
+            poll();
+            clearTimeout(setRefresh);
+            setRefresh = setTimeout(refresh, 60000);
+        })
+        .error(function() {
+            $("#loading").hide();
+            errorFlash("Campaign not found!");
+        });
+}
+
+$(document).ready(function() {
+    Highcharts.setOptions({ global: { useUTC: false } });
+    load();
+});
