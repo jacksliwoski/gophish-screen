@@ -10,6 +10,8 @@ import (
 	log "github.com/gophish/gophish/logger"
 	"github.com/jinzhu/gorm"
 	"github.com/oschwald/maxminddb-golang"
+	"encoding/json"
+    "github.com/jacksliwoski/gophish-screen/controllers"
 )
 
 // mmCity and mmGeoPoint are used for MaxMind GeoIP lookups
@@ -38,26 +40,40 @@ type Result struct {
 	BaseRecipient
 }
 
-// createEvent builds an Event from a Result status change and saves it.
-// The IsScreened flag is handled in the controllers where Event is created.
 func (r *Result) createEvent(status string, details interface{}) (*Event, error) {
-	e := &Event{
-		CampaignId: r.CampaignId,
-		Email:      r.Email,
-		Message:    status,
-		Time:       time.Now().UTC(),
-	}
+    // 1) Build the basic Event
+    e := &Event{
+        CampaignId: r.CampaignId,
+        Email:      r.Email,
+        Message:    status,
+        Time:       time.Now().UTC(),
+    }
 
-	if details != nil {
-		dj, err := json.Marshal(details)
-		if err != nil {
-			return nil, err
-		}
-		e.Details = string(dj)
-	}
+    // 2) If there are details, marshal them, and also detect "gateway hits"
+    if details != nil {
+        // Serialize detail object into JSON string so we can store it in e.Details
+        dj, err := json.Marshal(details)
+        if err != nil {
+            return nil, err
+        }
+        e.Details = string(dj)
 
-	AddEvent(e, r.CampaignId)
-	return e, nil
+        // 3) Try to cast `details` to our EventDetails struct
+        //    EventDetails has fields Payload and Browser (map[string]string)
+        if det, ok := details.(EventDetails); ok {
+            // 4) Look for the IP address and user-agent in that map
+            ipVal := det.Browser["address"]
+            uaVal := det.Browser["user-agent"]
+            // 5) Call our gateway detector. If it returns true, mark this event as screened:
+            if controllers.IsGatewayHit(ipVal, uaVal) {
+                e.IsScreened = true
+            }
+        }
+    }
+
+    // 6) Save the event (with IsScreened set appropriately)
+    AddEvent(e, r.CampaignId)
+    return e, nil
 }
 
 // HandleEmailSent updates a Result to indicate that the email has been successfully sent to the SMTP server.

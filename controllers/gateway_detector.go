@@ -20,7 +20,11 @@ var gatewayCIDRs = []string{
     "66.249.84.0/24", // GoogleImageProxy IP range
     "34.0.0.0/8",     // AWS public IP block (very broad)
     "35.0.0.0/8",
+	"37.0.0.0/8",
     "54.0.0.0/8",
+	"52.0.0.0/8",
+	"3.0.0.0/8",
+	"108.0.0.0/8",
 }
 
 var gatewayIPNets []*net.IPNet
