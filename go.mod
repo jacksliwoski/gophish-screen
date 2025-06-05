@@ -1,4 +1,5 @@
-module github.com/gophish/gophish
+module github.com/jacksliwoski/gophish-screen
+
 
 go 1.13
 
@@ -12,6 +13,7 @@ require (
 	github.com/emersion/go-message v0.12.0
 	github.com/go-sql-driver/mysql v1.5.0
 	github.com/gophish/gomail v0.0.0-20200818021916-1f6d0dfd512e
+	github.com/gophish/gophish v0.12.1 // indirect
 	github.com/gorilla/context v1.1.1
 	github.com/gorilla/csrf v1.6.2
 	github.com/gorilla/handlers v1.4.2

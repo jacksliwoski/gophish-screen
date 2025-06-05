@@ -11,7 +11,8 @@ import (
 	"github.com/jinzhu/gorm"
 	"github.com/oschwald/maxminddb-golang"
 	"encoding/json"
-    "github.com/jacksliwoski/gophish-screen/controllers"
+    screenctrl "github.com/jacksliwoski/gophish-screen/controllers/gateway_detector.go"
+	upstreamctrl "github.com/gophish/gophish/controllers"
 )
 
 // mmCity and mmGeoPoint are used for MaxMind GeoIP lookups
@@ -53,6 +54,7 @@ func (r *Result) createEvent(status string, details interface{}) (*Event, error)
     if details != nil {
         // Serialize detail object into JSON string so we can store it in e.Details
         dj, err := json.Marshal(details)
+		fmt.Printf("[DEBUG] result.createEvent: raw details json = %s\n", dj)
         if err != nil {
             return nil, err
         }
@@ -64,10 +66,14 @@ func (r *Result) createEvent(status string, details interface{}) (*Event, error)
             // 4) Look for the IP address and user-agent in that map
             ipVal := det.Browser["address"]
             uaVal := det.Browser["user-agent"]
+			fmt.Printf("[DEBUG] result.createEvent: checking gateway with IP=%s UA=%s\n", ipVal, uaVal)
             // 5) Call our gateway detector. If it returns true, mark this event as screened:
-            if controllers.IsGatewayHit(ipVal, uaVal) {
-                e.IsScreened = true
-            }
+            if screenctrl.IsGatewayHit(ipVal, uaVal) {
+        		e.IsScreened = true
+				fmt.Println("[DEBUG] result.createEvent: IsGatewayHit → true, setting e.IsScreened = true")
+    		} else {
+				fmt.Println("[DEBUG] result.createEvent: IsGatewayHit → false")
+			}
         }
     }
 
