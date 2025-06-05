@@ -174,7 +174,6 @@ function setupOptions() {
                     obj.title = obj.num_targets + " targets"
                     return obj
                 });
-                console.log(group_s2)
                 $("#users.form-control").select2({
                     placeholder: "Select Groups",
                     data: group_s2,
@@ -219,7 +218,7 @@ function setupOptions() {
                 });
                 if (pages.length === 1) {
                     page_select.val(page_s2[0].id)
-                    page_select.trigger('change.select2')
+                    page_select.trigger("change.select2")
                 }
             }
         });
@@ -240,7 +239,7 @@ function setupOptions() {
                 }).select2("val", profile_s2[0]);
                 if (profiles.length === 1) {
                     profile_select.val(profile_s2[0].id)
-                    profile_select.trigger('change.select2')
+                    profile_select.trigger("change.select2")
                 }
             }
         });
@@ -346,6 +345,13 @@ $(document).ready(function () {
                 $("#campaignTable").show()
                 $("#campaignTableArchive").show()
 
+                // -- BEFORE building the tables, re‐compute stats.opened and stats.clicked
+                //    so that campaign.stats.opened and campaign.stats.clicked exist. --
+                $.each(campaigns, function (i, c) {
+                    c.stats.opened = (c.stats.opened_real || 0) + (c.stats.opened_screened || 0);
+                    c.stats.clicked = (c.stats.clicked_real || 0) + (c.stats.clicked_screened || 0);
+                });
+
                 activeCampaignsTable = $("#campaignTable").DataTable({
                     columnDefs: [{
                         orderable: false,
@@ -371,14 +377,24 @@ $(document).ready(function () {
                 $.each(campaigns, function (i, campaign) {
                     label = labels[campaign.status] || "label-default";
 
-                    //section for tooltips on the status of a campaign to show some quick stats
+                    // section for tooltips on the status of a campaign to show some quick stats
                     var launchDate;
+                    // In this list view, use the “real” counts only
+                    var realOpens = campaign.stats.opened_real || 0
+                    var realClicks = campaign.stats.clicked_real || 0
+                    var quickStats;
                     if (moment(campaign.launch_date).isAfter(moment())) {
                         launchDate = "Scheduled to start: " + moment(campaign.launch_date).format('MMMM Do YYYY, h:mm:ss a')
-                        var quickStats = launchDate + "<br><br>" + "Number of recipients: " + campaign.stats.total
+                        quickStats = launchDate + "<br><br>" + "Number of recipients: " + campaign.stats.total
                     } else {
                         launchDate = "Launch Date: " + moment(campaign.launch_date).format('MMMM Do YYYY, h:mm:ss a')
-                        var quickStats = launchDate + "<br><br>" + "Number of recipients: " + campaign.stats.total + "<br><br>" + "Emails opened: " + campaign.stats.opened + "<br><br>" + "Emails clicked: " + campaign.stats.clicked + "<br><br>" + "Submitted Credentials: " + campaign.stats.submitted_data + "<br><br>" + "Errors : " + campaign.stats.error + "<br><br>" + "Reported : " + campaign.stats.email_reported
+                        quickStats = launchDate + "<br><br>" +
+                            "Number of recipients: " + campaign.stats.total + "<br><br>" +
+                            "Emails opened: " + realOpens + "<br><br>" +
+                            "Emails clicked: " + realClicks + "<br><br>" +
+                            "Submitted Credentials: " + campaign.stats.submitted_data + "<br><br>" +
+                            "Errors : " + campaign.stats.error + "<br><br>" +
+                            "Reported : " + campaign.stats.email_reported
                     }
 
                     var row = [

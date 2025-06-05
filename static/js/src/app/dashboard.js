@@ -100,7 +100,7 @@ function deleteCampaign(idx) {
     }
 }
 
-/* Renders a pie chart using the provided chartops */
+/* Renders a pie chart using the provided chartopts */
 function renderPieChart(chartopts) {
     return Highcharts.chart(chartopts['elemId'], {
         chart: {
@@ -158,6 +158,15 @@ function renderPieChart(chartopts) {
 }
 
 function generateStatsPieCharts(campaigns) {
+    // Re-create an "opened" and "clicked" field for the summary pie-charts,
+    // because generateStatsPieCharts still expects stats.opened / stats.clicked.
+    // (You could remove this block if you rewrite generateStatsPieCharts entirely,
+    // but this is the minimal change to preserve existing logic.)
+    $.each(campaigns, function (i, c) {
+        c.stats.opened = (c.stats.opened_real || 0) + (c.stats.opened_screened || 0);
+        c.stats.clicked = (c.stats.clicked_real || 0) + (c.stats.clicked_screened || 0);
+    });
+
     var stats_data = []
     var stats_series_data = {}
     var total = 0
@@ -176,8 +185,6 @@ function generateStatsPieCharts(campaigns) {
         })
     })
     $.each(stats_series_data, function (status, count) {
-        // I don't like this, but I guess it'll have to work.
-        // Turns submitted_data into Submitted Data
         if (!(status in statsMapping)) {
             return true
         }
@@ -207,12 +214,10 @@ function generateTimelineChart(campaigns) {
     var overview_data = []
     $.each(campaigns, function (i, campaign) {
         var campaign_date = moment.utc(campaign.created_date).local()
-        // Add it to the chart data
         campaign.y = 0
-        // Clicked events also contain our data submitted events
-        campaign.y += campaign.stats.clicked
+        // % Success = clicked_real (we can choose to use clicked_real / total)
+        campaign.y += campaign.stats.clicked_real || 0
         campaign.y = Math.floor((campaign.y / campaign.stats.total) * 100)
-        // Add the data to the overview chart
         overview_data.push({
             campaign_id: campaign.id,
             name: campaign.name,
@@ -293,75 +298,81 @@ $(document).ready(function () {
         .success(function (data) {
             $("#loading").hide()
             campaigns = data.campaigns
+
+            // Inject a temporary "opened" and "clicked" for the row tooltips (optional).
+            $.each(campaigns, function (i, c) {
+                c.stats.opened = (c.stats.opened_real || 0) + (c.stats.opened_screened || 0);
+                c.stats.clicked = (c.stats.clicked_real || 0) + (c.stats.clicked_screened || 0);
+            });
+
             if (campaigns.length > 0) {
                 $("#dashboard").show()
-                // Create the overview chart data
+
+                // Initialize DataTable with exactly 9 columns (0–8)
                 campaignTable = $("#campaignTable").DataTable({
-                    columnDefs: [{
-                            orderable: false,
-                            targets: "no-sort"
-                        },
-                        {
-                            className: "color-sent",
-                            targets: [2]
-                        },
-                        {
-                            className: "color-opened",
-                            targets: [3]
-                        },
-                        {
-                            className: "color-clicked",
-                            targets: [4]
-                        },
-                        {
-                            className: "color-success",
-                            targets: [5]
-                        },
-                        {
-                            className: "color-reported",
-                            targets: [6]
-                        }
+                    columnDefs: [
+                        { orderable: false, targets: "no-sort" },
+                        { className: "color-sent", targets: [2] },
+                        { className: "color-opened", targets: [3] },
+                        { className: "color-clicked", targets: [4] },
+                        { className: "color-success", targets: [5] },
+                        { className: "color-reported", targets: [6] }
                     ],
-                    order: [
-                        [1, "desc"]
-                    ]
+                    order: [[1, "desc"]]
                 });
-                campaignRows = []
+
+                var campaignRows = []
                 $.each(campaigns, function (i, campaign) {
                     var campaign_date = moment(campaign.created_date).format('MMMM Do YYYY, h:mm:ss a')
                     var label = statuses[campaign.status].label || "label-default";
-                    //section for tooltips on the status of a campaign to show some quick stats
-                    var launchDate;
+
+                    // Build a tooltip of “real” counts, not including screened probes
+                    var realOpens = campaign.stats.opened_real || 0
+                    var realClicks = campaign.stats.clicked_real || 0
+
+                    var quickStats;
                     if (moment(campaign.launch_date).isAfter(moment())) {
-                        launchDate = "Scheduled to start: " + moment(campaign.launch_date).format('MMMM Do YYYY, h:mm:ss a')
-                        var quickStats = launchDate + "<br><br>" + "Number of recipients: " + campaign.stats.total
+                        quickStats = 
+                            "Scheduled to start: " + moment(campaign.launch_date).format('MMMM Do YYYY, h:mm:ss a') +
+                            "<br><br>Number of recipients: " + campaign.stats.total
                     } else {
-                        launchDate = "Launch Date: " + moment(campaign.launch_date).format('MMMM Do YYYY, h:mm:ss a')
-                        var quickStats = launchDate + "<br><br>" + "Number of recipients: " + campaign.stats.total + "<br><br>" + "Emails opened: " + campaign.stats.opened + "<br><br>" + "Emails clicked: " + campaign.stats.clicked + "<br><br>" + "Submitted Credentials: " + campaign.stats.submitted_data + "<br><br>" + "Errors : " + campaign.stats.error + "<br><br>" + "Reported : " + campaign.stats.email_reported
+                        quickStats = 
+                            "Launch Date: " + moment(campaign.launch_date).format('MMMM Do YYYY, h:mm:ss a') +
+                            "<br><br>Number of recipients: " + campaign.stats.total +
+                            "<br><br>Emails opened: " + realOpens +
+                            "<br><br>Emails clicked: " + realClicks +
+                            "<br><br>Submitted Credentials: " + campaign.stats.submitted_data +
+                            "<br><br>Errors: " + campaign.stats.error +
+                            "<br><br>Reported: " + campaign.stats.email_reported
                     }
-                    // Add it to the list
+
+                    // Now push exactly 9 array elements (columns 0–8)
                     campaignRows.push([
-                        escapeHtml(campaign.name),
-                        campaign_date,
-                        campaign.stats.sent,
-                        campaign.stats.opened,
-                        campaign.stats.clicked,
-                        campaign.stats.submitted_data,
-                        campaign.stats.email_reported,
-                        "<span class=\"label " + label + "\" data-toggle=\"tooltip\" data-placement=\"right\" data-html=\"true\" title=\"" + quickStats + "\">" + campaign.status + "</span>",
-                        "<div class='pull-right'><a class='btn btn-primary' href='/campaigns/" + campaign.id + "' data-toggle='tooltip' data-placement='left' title='View Results'>\
-                    <i class='fa fa-bar-chart'></i>\
-                    </a>\
-                    <button class='btn btn-danger' onclick='deleteCampaign(" + i + ")' data-toggle='tooltip' data-placement='left' title='Delete Campaign'>\
-                    <i class='fa fa-trash-o'></i>\
-                    </button></div>"
-                    ])
-                    $('[data-toggle="tooltip"]').tooltip()
-                })
-                campaignTable.rows.add(campaignRows).draw()
-                // Build the charts
-                generateStatsPieCharts(campaigns)
-                generateTimelineChart(campaigns)
+                        escapeHtml(campaign.name),              // col 0
+                        campaign_date,                          // col 1
+                        campaign.stats.sent,                    // col 2: “Emails Sent”
+                        realOpens,                              // col 3: “Email Opened” (real only)
+                        realClicks,                             // col 4: “Clicked Link” (real only)
+                        campaign.stats.submitted_data,          // col 5
+                        campaign.stats.email_reported,          // col 6
+                        "<span class=\"label " + label + "\" data-toggle=\"tooltip\" data-placement=\"right\" data-html=\"true\" title=\"" + quickStats + "\">" + campaign.status + "</span>", // col 7
+                        "<div class='pull-right'>\
+                            <a class='btn btn-primary' href='/campaigns/" + campaign.id + "' data-toggle='tooltip' data-placement='left' title='View Results'>\
+                                <i class='fa fa-bar-chart'></i>\
+                            </a>\
+                            <button class='btn btn-danger' onclick='deleteCampaign(" + i + ")' data-toggle='tooltip' data-placement='left' title='Delete Campaign'>\
+                                <i class='fa fa-trash-o'></i>\
+                            </button>\
+                        </div>" // col 8: actions
+                    ]);
+                    $('[data-toggle="tooltip"]').tooltip();
+                });
+
+                campaignTable.rows.add(campaignRows).draw();
+
+                // Build the summary pie‐charts and timeline chart
+                generateStatsPieCharts(campaigns);
+                generateTimelineChart(campaigns);
             } else {
                 $("#emptyMessage").show()
             }

@@ -42,7 +42,7 @@ var statuses = {
         icon: "fa-exclamation",
         point: "ct-point-clicked"
     },
-    //not a status, but is used for the campaign timeline and user timeline
+    // not a status, but is used for the campaign timeline and user timeline
     "Email Reported": {
         color: "#45d6ef",
         label: "label-info",
@@ -122,7 +122,7 @@ var bubbles = []
 function dismiss() {
     $("#modal\\.flashes").empty()
     $("#modal").modal('hide')
-    $("#resultsTable").dataTable().DataTable().clear().draw()
+    $("#resultsTable").DataTable().clear().draw()
 }
 
 // Deletes a campaign after prompting the user
@@ -687,13 +687,15 @@ function poll() {
                     })
 
                     /* Update the datatable */
-                    resultsTable = $("#resultsTable").DataTable()
+                    var resultsTable = $("#resultsTable").DataTable()
                     resultsTable.rows().every(function (i, tableLoop, rowLoop) {
                         var row = this.row(i)
                         var rowData = row.data()
+                        // rowData has 9 elements: [0=id, 1=caret_icon, 2=first_name, 3=last_name, 4=email, 5=position, 6=status, 7=reported, 8=send_date]
                         var rid = rowData[0]
                         $.each(campaign.results, function (j, result) {
                             if (result.id == rid) {
+                                // Update hidden send_date in column 8, reported (col 7), and status (col 6)
                                 rowData[8] = moment(result.send_date).format('MMMM Do YYYY, h:mm:ss a')
                                 rowData[7] = result.reported
                                 rowData[6] = result.status
@@ -753,27 +755,31 @@ function load() {
                         payloadResults.show()
                     }
                 })
-                // Setup the results table
-                resultsTable = $("#resultsTable").DataTable({
+                // Setup the results table (9 columns total)
+                var resultsTable = $("#resultsTable").DataTable({
                     destroy: true,
                     "order": [
                         [2, "asc"]
                     ],
-                    columnDefs: [{
+                    columnDefs: [
+                        {
                             orderable: false,
                             targets: "no-sort"
-                        }, {
+                        },
+                        {
                             className: "details-control",
                             "targets": [1]
-                        }, {
+                        },
+                        {
                             "visible": false,
-                            "targets": [0, 8]
+                            "targets": [0, 8]  // hide both the ID (col 0) and the hidden "SendDate" (col 8)
                         },
                         {
                             "render": function (data, type, row) {
+                                // data = status, row[8] = send_date
                                 return createStatusLabel(data, row[8])
                             },
-                            "targets": [6]
+                            "targets": [6]  // status column
                         },
                         {
                             className: "text-center",
@@ -786,22 +792,23 @@ function load() {
                                 }
                                 return reported
                             },
-                            "targets": [7]
+                            "targets": [7]  // reported column
                         }
                     ]
                 });
+                // Populate the table: 9 columns per row
                 resultsTable.clear();
                 $.each(campaign.results, function (i, result) {
                     resultsTable.row.add([
-                        result.id,
-                        "<i id=\"caret\" class=\"fa fa-caret-right\"></i>",
-                        escapeHtml(result.first_name) || "",
-                        escapeHtml(result.last_name) || "",
-                        escapeHtml(result.email) || "",
-                        escapeHtml(result.position) || "",
-                        result.status,
-                        result.reported,
-                        moment(result.send_date).format('MMMM Do YYYY, h:mm:ss a')
+                        result.id,                                   // col 0: Result ID
+                        "<i id=\"caret\" class=\"fa fa-caret-right\"></i>", // col 1: expand/collapse icon
+                        escapeHtml(result.first_name) || "",         // col 2: First Name
+                        escapeHtml(result.last_name) || "",          // col 3: Last Name
+                        escapeHtml(result.email) || "",              // col 4: Email
+                        escapeHtml(result.position) || "",           // col 5: Position
+                        result.status,                               // col 6: Status
+                        result.reported,                             // col 7: Reported (true/false)
+                        moment(result.send_date).format('MMMM Do YYYY, h:mm:ss a') // col 8: hidden send_date
                     ])
                 })
                 resultsTable.draw();
@@ -851,7 +858,7 @@ function load() {
         })
         .error(function () {
             $("#loading").hide()
-            errorFlash(" Campaign not found!")
+            errorFlash("Campaign not found!")
         })
 }
 
