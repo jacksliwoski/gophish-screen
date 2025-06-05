@@ -5,7 +5,7 @@
     </div>
     <div style="display:none;" id="campaignResults">
         <div class="row">
-            <h1 class="page-header" id="page-title">Results for campaign.name</h1>
+            <h1 class="page-header" id="page-title">Results for {{.Campaign.Name}}</h1>
         </div>
         <div class="row">
             <a href="/campaigns" class="btn btn-default">
@@ -49,9 +49,27 @@
                 </div>
                 <div class="row">
                     <div style="height:200px;" class="col-lg-1 col-md-1"></div>
+
                     <div id="sent_chart" style="height:200px;" class="col-lg-2 col-md-2"></div>
-                    <div id="opened_chart" style="height:200px;" class="col-lg-2 col-md-2"></div>
-                    <div id="clicked_chart" style="height:200px;" class="col-lg-2 col-md-2"></div>
+
+                    <div class="col-lg-2 col-md-2">
+                        <div id="opened_chart" style="height:200px;"></div>
+                        <div class="legend key-legend" style="text-align:center; margin-top:8px;">
+                            <span class="legend-dot" style="display:inline-block;width:12px;height:12px;background-color:#4CAF50;margin-right:4px;"></span>Real Opens&nbsp;&nbsp;
+                            <span class="legend-dot" style="display:inline-block;width:12px;height:12px;background-color:#FF9800;margin-right:4px;"></span>Screened&nbsp;&nbsp;
+                            <span class="legend-dot" style="display:inline-block;width:12px;height:12px;background-color:#E0E0E0;margin-right:4px;"></span>Not Opened
+                        </div>
+                    </div>
+
+                    <div class="col-lg-2 col-md-2">
+                        <div id="clicked_chart" style="height:200px;"></div>
+                        <div class="legend key-legend" style="text-align:center; margin-top:8px;">
+                            <span class="legend-dot" style="display:inline-block;width:12px;height:12px;background-color:#4CAF50;margin-right:4px;"></span>Real Clicks&nbsp;&nbsp;
+                            <span class="legend-dot" style="display:inline-block;width:12px;height:12px;background-color:#FF9800;margin-right:4px;"></span>Screened&nbsp;&nbsp;
+                            <span class="legend-dot" style="display:inline-block;width:12px;height:12px;background-color:#E0E0E0;margin-right:4px;"></span>Not Clicked
+                        </div>
+                    </div>
+
                     <div id="submitted_data_chart" style="height:200px;" class="col-lg-2 col-md-2"></div>
                     <div id="reported_chart" style="height:200px;" class="col-lg-2 col-md-2"></div>
                     <div style="height:200px;" class="col-lg-1 col-md-1"></div>
@@ -86,6 +104,8 @@
     </div>
     <div id="flashes" class="row"></div>
 </div>
-{{end}} {{define "scripts"}}
+{{end}}
+
+{{define "scripts"}}
 <script src="/js/dist/app/campaign_results.min.js"></script>
 {{end}}

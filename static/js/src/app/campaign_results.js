@@ -114,7 +114,9 @@ var progressListing = [
     "Submitted Data"
 ]
 
-var campaign = {}
+var campaign = {
+    stats: {}  // will hold aggregated stats: sent, opened_real, opened_screened, clicked_real, clicked_screened
+}
 var bubbles = []
 
 function dismiss() {
@@ -173,18 +175,7 @@ function completeCampaign() {
         confirmButtonColor: "#428bca",
         reverseButtons: true,
         allowOutsideClick: false,
-        showLoaderOnConfirm: true,
-        preConfirm: function () {
-            return new Promise(function (resolve, reject) {
-                api.campaignId.complete(campaign.id)
-                    .success(function (msg) {
-                        resolve()
-                    })
-                    .error(function (data) {
-                        reject(data.responseJSON.message)
-                    })
-            })
-        }
+        showLoaderOnConfirm: true
     }).then(function (result) {
         if (result.value){
             Swal.fire(
@@ -514,7 +505,7 @@ var renderTimelineChart = function (chartopts) {
     })
 }
 
-/* Renders a pie chart using the provided chartops */
+/* Renders a pie chart using the provided chartopts */
 var renderPieChart = function (chartopts) {
     return Highcharts.chart(chartopts['elemId'], {
         chart: {
@@ -634,88 +625,100 @@ function poll() {
     api.campaignId.results(campaign.id)
         .success(function (c) {
             campaign = c
-            /* Update the timeline */
-            var timeline_series_data = []
-            $.each(campaign.timeline, function (i, event) {
-                var event_date = moment.utc(event.time).local()
-                timeline_series_data.push({
-                    email: event.email,
-                    message: event.message,
-                    x: event_date.valueOf(),
-                    y: 1,
-                    marker: {
-                        fillColor: statuses[event.message].color
-                    }
-                })
-            })
-            var timeline_chart = $("#timeline_chart").highcharts()
-            timeline_chart.series[0].update({
-                data: timeline_series_data
-            })
-            /* Update the results donut chart */
-            var email_series_data = {}
-            // Load the initial data
-            Object.keys(statusMapping).forEach(function (k) {
-                email_series_data[k] = 0
-            });
-            $.each(campaign.results, function (i, result) {
-                email_series_data[result.status]++;
-                if (result.reported) {
-                    email_series_data['Email Reported']++
-                }
-                // Backfill status values
-                var step = progressListing.indexOf(result.status)
-                for (var i = 0; i < step; i++) {
-                    email_series_data[progressListing[i]]++
-                }
-            })
-            $.each(email_series_data, function (status, count) {
-                var email_data = []
-                if (!(status in statusMapping)) {
-                    return true
-                }
-                email_data.push({
-                    name: status,
-                    y: Math.floor((count / campaign.results.length) * 100),
-                    count: count
-                })
-                email_data.push({
-                    name: '',
-                    y: 100 - Math.floor((count / campaign.results.length) * 100)
-                })
-                var chart = $("#" + statusMapping[status] + "_chart").highcharts()
-                chart.series[0].update({
-                    data: email_data
-                })
-            })
 
-            /* Update the datatable */
-            resultsTable = $("#resultsTable").DataTable()
-            resultsTable.rows().every(function (i, tableLoop, rowLoop) {
-                var row = this.row(i)
-                var rowData = row.data()
-                var rid = rowData[0]
-                $.each(campaign.results, function (j, result) {
-                    if (result.id == rid) {
-                        rowData[8] = moment(result.send_date).format('MMMM Do YYYY, h:mm:ss a')
-                        rowData[7] = result.reported
-                        rowData[6] = result.status
-                        resultsTable.row(i).data(rowData)
-                        if (row.child.isShown()) {
-                            $(row.node()).find("#caret").removeClass("fa-caret-right")
-                            $(row.node()).find("#caret").addClass("fa-caret-down")
-                            row.child(renderTimeline(row.data()))
-                        }
-                        return false
-                    }
+            // Fetch stats for this campaign
+            api.campaignId.stats(campaign.id)
+                .success(function (stats) {
+                    // stats should include: sent, opened_real, opened_screened, clicked_real, clicked_screened
+                    campaign.stats = stats
+
+                    /* Update the timeline */
+                    var timeline_series_data = []
+                    $.each(campaign.timeline, function (i, event) {
+                        var event_date = moment.utc(event.time).local()
+                        timeline_series_data.push({
+                            email: event.email,
+                            message: event.message,
+                            x: event_date.valueOf(),
+                            y: 1,
+                            marker: {
+                                fillColor: statuses[event.message].color
+                            }
+                        })
+                    })
+                    var timeline_chart = $("#timeline_chart").highcharts()
+                    timeline_chart.series[0].update({
+                        data: timeline_series_data
+                    })
+
+                    /* Update the results donut charts */
+
+                    // 1) Opened Emails: Real / Screened / Not Opened
+                    var totalSent = campaign.stats.sent
+                    var realOpens = campaign.stats.opened_real
+                    var screenedOpens = campaign.stats.opened_screened
+                    var notOpened = totalSent - (realOpens + screenedOpens)
+                    var opened_data = [
+                        { name: "Real Opens", y: Math.floor((realOpens / totalSent) * 100), count: realOpens },
+                        { name: "Screened", y: Math.floor((screenedOpens / totalSent) * 100), count: screenedOpens },
+                        { name: "Not Opened", y: Math.floor((notOpened / totalSent) * 100), count: notOpened }
+                    ]
+                    renderPieChart({
+                        elemId: 'opened_chart',
+                        title: 'Email Opens',
+                        data: opened_data,
+                        colors: ['#4CAF50', '#FF9800', '#E0E0E0']
+                    })
+
+                    // 2) Clicked Links: Real / Screened / Not Clicked
+                    var realClicks = campaign.stats.clicked_real
+                    var screenedClicks = campaign.stats.clicked_screened
+                    var notClicked = totalSent - (realClicks + screenedClicks)
+                    var clicked_data = [
+                        { name: "Real Clicks", y: Math.floor((realClicks / totalSent) * 100), count: realClicks },
+                        { name: "Screened", y: Math.floor((screenedClicks / totalSent) * 100), count: screenedClicks },
+                        { name: "Not Clicked", y: Math.floor((notClicked / totalSent) * 100), count: notClicked }
+                    ]
+                    renderPieChart({
+                        elemId: 'clicked_chart',
+                        title: 'Link Clicks',
+                        data: clicked_data,
+                        colors: ['#4CAF50', '#FF9800', '#E0E0E0']
+                    })
+
+                    /* Update the datatable */
+                    resultsTable = $("#resultsTable").DataTable()
+                    resultsTable.rows().every(function (i, tableLoop, rowLoop) {
+                        var row = this.row(i)
+                        var rowData = row.data()
+                        var rid = rowData[0]
+                        $.each(campaign.results, function (j, result) {
+                            if (result.id == rid) {
+                                rowData[8] = moment(result.send_date).format('MMMM Do YYYY, h:mm:ss a')
+                                rowData[7] = result.reported
+                                rowData[6] = result.status
+                                resultsTable.row(i).data(rowData)
+                                if (row.child.isShown()) {
+                                    $(row.node()).find("#caret").removeClass("fa-caret-right")
+                                    $(row.node()).find("#caret").addClass("fa-caret-down")
+                                    row.child(renderTimeline(row.data()))
+                                }
+                                return false
+                            }
+                        })
+                    })
+                    resultsTable.draw(false)
+
+                    /* Update the map information */
+                    updateMap(campaign.results)
+
+                    $('[data-toggle="tooltip"]').tooltip()
+                    $("#refresh_message").hide()
+                    $("#refresh_btn").show()
+                }) // end stats success
+                .error(function () {
+                    console.error("Failed to fetch campaign stats");
                 })
-            })
-            resultsTable.draw(false)
-            /* Update the map information */
-            updateMap(campaign.results)
-            $('[data-toggle="tooltip"]').tooltip()
-            $("#refresh_message").hide()
-            $("#refresh_btn").show()
         })
 }
 
@@ -788,11 +791,6 @@ function load() {
                     ]
                 });
                 resultsTable.clear();
-                var email_series_data = {}
-                var timeline_series_data = []
-                Object.keys(statusMapping).forEach(function (k) {
-                    email_series_data[k] = 0
-                });
                 $.each(campaign.results, function (i, result) {
                     resultsTable.row.add([
                         result.id,
@@ -805,15 +803,6 @@ function load() {
                         result.reported,
                         moment(result.send_date).format('MMMM Do YYYY, h:mm:ss a')
                     ])
-                    email_series_data[result.status]++;
-                    if (result.reported) {
-                        email_series_data['Email Reported']++
-                    }
-                    // Backfill status values
-                    var step = progressListing.indexOf(result.status)
-                    for (var i = 0; i < step; i++) {
-                        email_series_data[progressListing[i]]++
-                    }
                 })
                 resultsTable.draw();
                 // Setup tooltips
@@ -836,47 +825,8 @@ function load() {
                         tr.addClass('shown');
                     }
                 });
-                // Setup the graphs
-                $.each(campaign.timeline, function (i, event) {
-                    if (event.message == "Campaign Created") {
-                        return true
-                    }
-                    var event_date = moment.utc(event.time).local()
-                    timeline_series_data.push({
-                        email: event.email,
-                        message: event.message,
-                        x: event_date.valueOf(),
-                        y: 1,
-                        marker: {
-                            fillColor: statuses[event.message].color
-                        }
-                    })
-                })
-                renderTimelineChart({
-                    data: timeline_series_data
-                })
-                $.each(email_series_data, function (status, count) {
-                    var email_data = []
-                    if (!(status in statusMapping)) {
-                        return true
-                    }
-                    email_data.push({
-                        name: status,
-                        y: Math.floor((count / campaign.results.length) * 100),
-                        count: count
-                    })
-                    email_data.push({
-                        name: '',
-                        y: 100 - Math.floor((count / campaign.results.length) * 100)
-                    })
-                    var chart = renderPieChart({
-                        elemId: statusMapping[status] + '_chart',
-                        title: status,
-                        name: status,
-                        data: email_data,
-                        colors: [statuses[status].color, '#dddddd']
-                    })
-                })
+                // Setup the graphs after fetching stats (in poll())
+                poll()
 
                 if (use_map) {
                     $("#resultsMapContainer").show()
