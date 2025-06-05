@@ -48,7 +48,7 @@ type CampaignSummaries struct {
 	Campaigns []CampaignSummary `json:"campaigns"`
 }
 
-// CampaignSummary is a struct representing the overview of a single camaign
+// CampaignSummary is a struct representing the overview of a single campaign
 type CampaignSummary struct {
 	Id            int64         `json:"id"`
 	CreatedDate   time.Time     `json:"created_date"`
@@ -62,13 +62,12 @@ type CampaignSummary struct {
 
 // CampaignStats is a struct representing the statistics for a single campaign
 type CampaignStats struct {
-	Total         int64 `json:"total"`
-	EmailsSent    int64 `json:"sent"`
-	OpenedEmail   int64 `json:"opened"`
-	ClickedLink   int64 `json:"clicked"`
-	SubmittedData int64 `json:"submitted_data"`
-	EmailReported int64 `json:"email_reported"`
-	Error         int64 `json:"error"`
+	Total          int64 `json:"total"`
+	EmailsSent     int64 `json:"sent"`
+	OpenedReal     int64 `json:"opened_real"`
+	OpenedScreened int64 `json:"opened_screened"`
+	ClickedReal    int64 `json:"clicked_real"`
+	ClickedScreened int64 `json:"clicked_screened"`
 }
 
 // Event contains the fields for an event
@@ -264,42 +263,43 @@ func (c *Campaign) generateSendDate(idx int, totalRecipients int) time.Time {
 }
 
 // getCampaignStats returns a CampaignStats object for the campaign with the given campaign ID.
-// It also backfills numbers as appropriate with a running total, so that the values are aggregated.
+// It aggregates counts of real vs. screened opens and clicks from the events table.
 func getCampaignStats(cid int64) (CampaignStats, error) {
-	s := CampaignStats{}
-	query := db.Table("results").Where("campaign_id = ?", cid)
-	err := query.Count(&s.Total).Error
-	if err != nil {
-		return s, err
+	// statsRow is a helper struct to scan raw SQL results
+	type statsRow struct {
+		Sent           int64 `gorm:"column:sent"`
+		OpenedReal     int64 `gorm:"column:opened_real"`
+		OpenedScreened int64 `gorm:"column:opened_screened"`
+		ClickedReal    int64 `gorm:"column:clicked_real"`
+		ClickedScreened int64 `gorm:"column:clicked_screened"`
 	}
-	query.Where("status=?", EventDataSubmit).Count(&s.SubmittedData)
+
+	var row statsRow
+	raw := `
+	SELECT
+	  COUNT(*) AS sent,
+	  SUM(CASE WHEN ev.message = 'opened'  AND ev.is_screened = FALSE THEN 1 ELSE 0 END) AS opened_real,
+	  SUM(CASE WHEN ev.message = 'opened'  AND ev.is_screened = TRUE  THEN 1 ELSE 0 END) AS opened_screened,
+	  SUM(CASE WHEN ev.message = 'clicked' AND ev.is_screened = FALSE THEN 1 ELSE 0 END) AS clicked_real,
+	  SUM(CASE WHEN ev.message = 'clicked' AND ev.is_screened = TRUE  THEN 1 ELSE 0 END) AS clicked_screened
+	FROM events ev
+	WHERE ev.campaign_id = ?
+	`
+
+	err := db.Raw(raw, cid).Scan(&row).Error
 	if err != nil {
-		return s, err
+		return CampaignStats{}, err
 	}
-	query.Where("status=?", EventClicked).Count(&s.ClickedLink)
-	if err != nil {
-		return s, err
+
+	stats := CampaignStats{
+		Total:           row.Sent,
+		EmailsSent:      row.Sent,
+		OpenedReal:      row.OpenedReal,
+		OpenedScreened:  row.OpenedScreened,
+		ClickedReal:     row.ClickedReal,
+		ClickedScreened: row.ClickedScreened,
 	}
-	query.Where("reported=?", true).Count(&s.EmailReported)
-	if err != nil {
-		return s, err
-	}
-	// Every submitted data event implies they clicked the link
-	s.ClickedLink += s.SubmittedData
-	err = query.Where("status=?", EventOpened).Count(&s.OpenedEmail).Error
-	if err != nil {
-		return s, err
-	}
-	// Every clicked link event implies they opened the email
-	s.OpenedEmail += s.ClickedLink
-	err = query.Where("status=?", EventSent).Count(&s.EmailsSent).Error
-	if err != nil {
-		return s, err
-	}
-	// Every opened email event implies the email was sent
-	s.EmailsSent += s.OpenedEmail
-	err = query.Where("status=?", Error).Count(&s.Error).Error
-	return s, err
+	return stats, nil
 }
 
 // GetCampaigns returns the campaigns owned by the given user.
