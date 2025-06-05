@@ -48,12 +48,51 @@
                     </div>
                 </div>
                 <div class="row">
-                    <div style="height:200px;" class="col-lg-1 col-md-1"></div>
-                    <div id="sent_chart" style="height:200px;" class="col-lg-2 col-md-2"></div>
-                    <div id="opened_chart" style="height:200px;" class="col-lg-2 col-md-2"></div>
-                    <div id="clicked_chart" style="height:200px;" class="col-lg-2 col-md-2"></div>
-                    <div id="submitted_data_chart" style="height:200px;" class="col-lg-2 col-md-2"></div>
-                    <div id="reported_chart" style="height:200px;" class="col-lg-2 col-md-2"></div>
+                     <!-- 1) EMAIL SENT (campaign‐specific) -->
+                     <div id="sent_chart" style="height:200px;" class="col-lg-2 col-md-2"></div>
+         
+                     <!-- 2) EMAIL SCREENED (campaign‐specific) -->
+                     <div class="col-lg-2 col-md-2">
+                         <div id="screened_chart" style="height:200px;"></div>
+                         <div class="legend key-legend"
+                              style="text-align:center; margin-top:8px;">
+                             <span class="legend-dot"
+                                   style="display:inline-block;width:12px;height:12px;background-color:#FF9800;margin-right:4px;"></span>
+                             Screened&nbsp;&nbsp;
+                             <span class="legend-dot"
+                                   style="display:inline-block;width:12px;height:12px;background-color:#E0E0E0;margin-right:4px;"></span>
+                             Not Screened
+                         </div>
+                     </div>
+         
+                     <!-- 3) EMAIL OPENED (Real, campaign‐specific) -->
+                     <div class="col-lg-2 col-md-2">
+                         <div id="opened_chart" style="height:200px;"></div>
+                         <div class="legend key-legend"
+                              style="text-align:center; margin-top:8px;">
+                             <span class="legend-dot"
+                                   style="display:inline-block;width:12px;height:12px;background-color:#4CAF50;margin-right:4px;"></span>
+                             Real Opens&nbsp;&nbsp;
+                            <span class="legend-dot"
+                                  style="display:inline-block;width:12px;height:12px;background-color:#E0E0E0;margin-right:4px;"></span>
+                            Not Opened
+                        </div>
+                    </div>
+        
+                    <!-- 4) LINK CLICKS (Real, campaign‐specific) -->
+                    <div class="col-lg-2 col-md-2">
+                        <div id="clicked_chart" style="height:200px;"></div>
+                        <div class="legend key-legend"
+                             style="text-align:center; margin-top:8px;">
+                            <span class="legend-dot"
+                                  style="display:inline-block;width:12px;height:12px;background-color:#f05b4f;margin-right:4px;"></span>
+                            Real Clicks&nbsp;&nbsp;
+                            <span class="legend-dot"
+                                  style="display:inline-block;width:12px;height:12px;background-color:#E0E0E0;margin-right:4px;"></span>
+                            Not Clicked
+                        </div>
+                    </div>
+        
                     <div style="height:200px;" class="col-lg-1 col-md-1"></div>
                 </div>
                 <div class="row" id="resultsMapContainer">
