@@ -1,22 +1,16 @@
 {{define "body"}}
 <div class="col-sm-9 col-sm-offset-3 col-md-10 col-md-offset-2 main">
-    <!-- Spinner (shown until JS hides it) -->
     <div id="loading">
         <i class="fa fa-spinner fa-spin fa-4x"></i>
     </div>
-
-    <!-- All of the campaign‐results content is hidden by default. JS will unhide it. -->
-    <div id="campaignResults" style="display:none;">
+    <div style="display:none;" id="campaignResults">
         <div class="row">
-            <h1 class="page-header" id="page-title">
-                Results for {{.Campaign.Name}}
-            </h1>
+            <h1 class="page-header" id="page-title">Results for campaign.name</h1>
         </div>
         <div class="row">
             <a href="/campaigns" class="btn btn-default">
                 <i class="fa fa-arrow-circle-o-left fa-lg"></i> Back
             </a>
-
             <div class="btn-group">
                 <button type="button" id="exportButton" class="btn btn-primary dropdown-toggle" data-toggle="dropdown"
                     aria-haspopup="true" aria-expanded="true">
@@ -24,11 +18,14 @@
                     <i class="fa fa-caret-down"></i>
                 </button>
                 <ul class="dropdown-menu" aria-labelledby="exportButton">
-                    <li><a href="#" onclick="exportAsCSV('results')">Results</a></li>
-                    <li><a href="#" onclick="exportAsCSV('events')">Raw Events</a></li>
+                    <li>
+                        <a href="#" onclick="exportAsCSV('results')">Results</a>
+                    </li>
+                    <li>
+                        <a href="#" onclick="exportAsCSV('events')">Raw Events</a>
+                    </li>
                 </ul>
             </div>
-
             <button id="complete_button" type="button" class="btn btn-blue" data-toggle="tooltip" onclick="completeCampaign()">
                 <i class="fa fa-flag-checkered"></i> Complete
             </button>
@@ -38,67 +35,36 @@
             <button id="refresh_btn" type="button" class="btn btn-blue" data-toggle="tooltip" onclick="refresh()">
                 <i class="fa fa-refresh fa-lg"></i> Refresh
             </button>
-            <span id="refresh_message" style="display:none;">
+            <span id="refresh_message">
                 <i class="fa fa-spin fa-spinner"></i> Refreshing
             </span>
         </div>
         <br />
-
-        <!-- TIMELINE CHART, THEN FOUR DONUTS -->
         <div class="row">
             <div class="col-lg-12 col-md-12 col-sm-12 col-xs-12">
-                <!-- Campaign Timeline -->
                 <div class="row">
                     <div class="col-lg-12 col-md-12 col-sm-12 col-xs-12">
                         <div id="timeline_chart"></div>
                     </div>
                 </div>
-
-                <!-- Four Donuts: Sent / Screened / Opened / Clicked -->
-                <div class="row" style="margin-top: 20px;">
-                    <!-- Spacer -->
-                    <div class="col-lg-1 col-md-1"></div>
-
-                    <!-- 1) Email Sent -->
+                <div class="row">
+                    <div style="height:200px;" class="col-lg-1 col-md-1"></div>
                     <div id="sent_chart" style="height:200px;" class="col-lg-2 col-md-2"></div>
-
-                    <!-- 2) Email Screened -->
-                    <div id="screened_chart" style="height:200px;" class="col-lg-2 col-md-2"></div>
-
-                    <!-- 3) Email Opened -->
-                    <div class="col-lg-2 col-md-2">
-                        <div id="opened_chart" style="height:200px;"></div>
-                        <div class="legend key-legend" style="text-align:center; margin-top:8px;">
-                            <span class="legend-dot" style="display:inline-block;width:12px;height:12px;background-color:#4CAF50;margin-right:4px;"></span>Real Opens&nbsp;&nbsp;
-                            <span class="legend-dot" style="display:inline-block;width:12px;height:12px;background-color:#E0E0E0;margin-right:4px;"></span>Not Opened
-                        </div>
-                    </div>
-
-                    <!-- 4) Link Clicked -->
-                    <div class="col-lg-2 col-md-2">
-                        <div id="clicked_chart" style="height:200px;"></div>
-                        <div class="legend key-legend" style="text-align:center; margin-top:8px;">
-                            <span class="legend-dot" style="display:inline-block;width:12px;height:12px;background-color:#f05b4f;margin-right:4px;"></span>Real Clicks&nbsp;&nbsp;
-                            <span class="legend-dot" style="display:inline-block;width:12px;height:12px;background-color:#E0E0E0;margin-right:4px;"></span>Not Clicked
-                        </div>
-                    </div>
-
-                    <!-- Spacer -->
-                    <div class="col-lg-1 col-md-1"></div>
+                    <div id="opened_chart" style="height:200px;" class="col-lg-2 col-md-2"></div>
+                    <div id="clicked_chart" style="height:200px;" class="col-lg-2 col-md-2"></div>
+                    <div id="submitted_data_chart" style="height:200px;" class="col-lg-2 col-md-2"></div>
+                    <div id="reported_chart" style="height:200px;" class="col-lg-2 col-md-2"></div>
+                    <div style="height:200px;" class="col-lg-1 col-md-1"></div>
                 </div>
-
-                <!-- Map of Geo-locations (if enabled) -->
-                <div class="row" id="resultsMapContainer" style="margin-top:20px; display:none;">
+                <div class="row" id="resultsMapContainer">
                     <div class="col-md-6">
                         <p style="text-align:center;">Targets Map</p>
-                        <div id="resultsMap" style="height:300px;"></div>
+                        <div id="resultsMap"></div>
                     </div>
                 </div>
             </div>
         </div>
-
-        <!-- DETAILS TABLE -->
-        <div class="row" style="margin-top:30px;">
+        <div class="row">
             <h2>Details</h2>
             <table id="resultsTable" class="table">
                 <thead>
@@ -111,19 +77,15 @@
                         <th>Position</th>
                         <th>Status</th>
                         <th class="text-center">Reported</th>
-                        <th class="no-sort">Sent Date</th>
                     </tr>
                 </thead>
-                <tbody></tbody>
+                <tbody>
+                </tbody>
             </table>
         </div>
     </div>
-
-    <!-- Flashes (errors/success) appear below, if any -->
     <div id="flashes" class="row"></div>
 </div>
-{{end}}
-
-{{define "scripts"}}
-<script src="/js/dist/app/campaign_results.js"></script>
+{{end}} {{define "scripts"}}
+<script src="/js/dist/app/campaign_results.min.js"></script>
 {{end}}
