@@ -5,7 +5,7 @@ import (
     "strings"
 )
 
-// A small list of substrings commonly seen in email-gateway User-Agents.
+// gatewayUASignatures lists substrings found in common email-gateway UAs.
 var gatewayUASignatures = []string{
     "GoogleImageProxy",             // Gmail/Google image proxy
     "ms-office-web",                // Outlook/Exchange crawler (example)
@@ -15,15 +15,14 @@ var gatewayUASignatures = []string{
     "Linux x86_64) AppleWebKit",    // generic Linux/Chrome bots
 }
 
-// A list of CIDRs known to host common gateway scanners.
+// gatewayCIDRs lists CIDR blocks belonging to common scanning services.
 var gatewayCIDRs = []string{
-    "66.249.84.0/24", // GoogleImageProxy IP block
-    "34.0.0.0/8",     // AWS IP ranges (broad; refine if desired)
+    "66.249.84.0/24", // GoogleImageProxy IP range
+    "34.0.0.0/8",     // AWS public IP block (very broad)
     "35.0.0.0/8",
     "54.0.0.0/8",
 }
 
-// Pre-parse the gateway CIDRs once at init-time.
 var gatewayIPNets []*net.IPNet
 
 func init() {
@@ -34,18 +33,18 @@ func init() {
     }
 }
 
-// isGatewayUA returns true if the User-Agent matches any known gateway signature.
+// isGatewayUA returns true if the User-Agent string matches any gateway signature.
 func isGatewayUA(ua string) bool {
-    lowerUA := strings.ToLower(ua)
+    lower := strings.ToLower(ua)
     for _, sig := range gatewayUASignatures {
-        if strings.Contains(lowerUA, strings.ToLower(sig)) {
+        if strings.Contains(lower, strings.ToLower(sig)) {
             return true
         }
     }
     return false
 }
 
-// isGatewayIP returns true if the IP falls into any parsed gateway CIDR.
+// isGatewayIP returns true if the request IP falls into a known gateway CIDR.
 func isGatewayIP(ipStr string) bool {
     ip := net.ParseIP(ipStr)
     if ip == nil {
@@ -59,7 +58,7 @@ func isGatewayIP(ipStr string) bool {
     return false
 }
 
-// IsGatewayHit combines UA + IP tests: if either matches, treat as “screened.”
+// IsGatewayHit returns true if either UA or IP indicates a gateway hit.
 func IsGatewayHit(ipStr, ua string) bool {
     if isGatewayUA(ua) {
         return true
