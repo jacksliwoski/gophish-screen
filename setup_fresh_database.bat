@@ -28,7 +28,7 @@ if exist gophish.db (
 )
 
 echo Creating new database with complete schema...
-sqlite3 gophish.db < create_database.sql
+sqlite3 gophish.db < complete_database.sql
 
 if errorlevel 1 (
     echo ERROR: Failed to create database schema.

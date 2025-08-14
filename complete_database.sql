@@ -1,15 +1,31 @@
 -- Complete Gophish database initialization script
--- This creates all necessary tables with the correct schema
+-- This creates all tables with ALL necessary columns from the start
 
--- Initial tables from 20160118194630_init.sql
-CREATE TABLE IF NOT EXISTS "users" (
+-- Users table with ALL columns needed
+CREATE TABLE "users" (
     "id" INTEGER PRIMARY KEY AUTOINCREMENT,
     "username" VARCHAR(255) NOT NULL UNIQUE,
     "hash" VARCHAR(255),
-    "api_key" VARCHAR(255) NOT NULL UNIQUE
+    "api_key" VARCHAR(255) NOT NULL UNIQUE,
+    "role_id" INTEGER,
+    "password_change_required" BOOLEAN DEFAULT TRUE,
+    "last_login" DATETIME,
+    "account_locked" BOOLEAN DEFAULT FALSE
 );
 
-CREATE TABLE IF NOT EXISTS "templates" (
+-- Events table with ALL columns needed  
+CREATE TABLE "events" (
+    "id" INTEGER PRIMARY KEY AUTOINCREMENT,
+    "campaign_id" BIGINT,
+    "email" VARCHAR(255),
+    "time" DATETIME,
+    "message" VARCHAR(255),
+    "details" VARCHAR(255),
+    "is_screened" BOOLEAN DEFAULT FALSE
+);
+
+-- All other base tables
+CREATE TABLE "templates" (
     "id" INTEGER PRIMARY KEY AUTOINCREMENT,
     "user_id" BIGINT,
     "name" VARCHAR(255),
@@ -19,7 +35,7 @@ CREATE TABLE IF NOT EXISTS "templates" (
     "modified_date" DATETIME
 );
 
-CREATE TABLE IF NOT EXISTS "targets" (
+CREATE TABLE "targets" (
     "id" INTEGER PRIMARY KEY AUTOINCREMENT,
     "first_name" VARCHAR(255),
     "last_name" VARCHAR(255),
@@ -27,7 +43,7 @@ CREATE TABLE IF NOT EXISTS "targets" (
     "position" VARCHAR(255)
 );
 
-CREATE TABLE IF NOT EXISTS "smtp" (
+CREATE TABLE "smtp" (
     "smtp_id" INTEGER PRIMARY KEY AUTOINCREMENT,
     "campaign_id" BIGINT,
     "host" VARCHAR(255),
@@ -35,7 +51,7 @@ CREATE TABLE IF NOT EXISTS "smtp" (
     "from_address" VARCHAR(255)
 );
 
-CREATE TABLE IF NOT EXISTS "results" (
+CREATE TABLE "results" (
     "id" INTEGER PRIMARY KEY AUTOINCREMENT,
     "campaign_id" BIGINT,
     "user_id" BIGINT,
@@ -49,7 +65,7 @@ CREATE TABLE IF NOT EXISTS "results" (
     "longitude" REAL
 );
 
-CREATE TABLE IF NOT EXISTS "pages" (
+CREATE TABLE "pages" (
     "id" INTEGER PRIMARY KEY AUTOINCREMENT,
     "user_id" BIGINT,
     "name" VARCHAR(255),
@@ -57,27 +73,19 @@ CREATE TABLE IF NOT EXISTS "pages" (
     "modified_date" DATETIME
 );
 
-CREATE TABLE IF NOT EXISTS "groups" (
+CREATE TABLE "groups" (
     "id" INTEGER PRIMARY KEY AUTOINCREMENT,
     "user_id" BIGINT,
     "name" VARCHAR(255),
     "modified_date" DATETIME
 );
 
-CREATE TABLE IF NOT EXISTS "group_targets" (
+CREATE TABLE "group_targets" (
     "group_id" BIGINT,
     "target_id" BIGINT
 );
 
-CREATE TABLE IF NOT EXISTS "events" (
-    "id" INTEGER PRIMARY KEY AUTOINCREMENT,
-    "campaign_id" BIGINT,
-    "email" VARCHAR(255),
-    "time" DATETIME,
-    "message" VARCHAR(255)
-);
-
-CREATE TABLE IF NOT EXISTS "campaigns" (
+CREATE TABLE "campaigns" (
     "id" INTEGER PRIMARY KEY AUTOINCREMENT,
     "user_id" BIGINT,
     "name" VARCHAR(255) NOT NULL,
@@ -89,7 +97,7 @@ CREATE TABLE IF NOT EXISTS "campaigns" (
     "url" VARCHAR(255)
 );
 
-CREATE TABLE IF NOT EXISTS "attachments" (
+CREATE TABLE "attachments" (
     "id" INTEGER PRIMARY KEY AUTOINCREMENT,
     "template_id" BIGINT,
     "content" VARCHAR(255),
@@ -97,44 +105,28 @@ CREATE TABLE IF NOT EXISTS "attachments" (
     "name" VARCHAR(255)
 );
 
--- RBAC tables from 20190105192341_0.8.0_rbac.sql
-CREATE TABLE IF NOT EXISTS "roles" (
+-- RBAC tables
+CREATE TABLE "roles" (
     "id" INTEGER PRIMARY KEY AUTOINCREMENT,
     "slug" VARCHAR(255) NOT NULL UNIQUE,
     "name" VARCHAR(255) NOT NULL UNIQUE,
     "description" VARCHAR(255)
 );
 
-CREATE TABLE IF NOT EXISTS "permissions" (
+CREATE TABLE "permissions" (
     "id" INTEGER PRIMARY KEY AUTOINCREMENT,
     "slug" VARCHAR(255) NOT NULL UNIQUE,
     "name" VARCHAR(255) NOT NULL UNIQUE,
     "description" VARCHAR(255)
 );
 
-CREATE TABLE IF NOT EXISTS "role_permissions" (
+CREATE TABLE "role_permissions" (
     "role_id" INTEGER NOT NULL,
     "permission_id" INTEGER NOT NULL
 );
 
--- Insert default roles
-INSERT OR REPLACE INTO "roles" ("id", "slug", "name", "description") VALUES
-    (1, "admin", "Admin", "System administrator with full permissions"),
-    (2, "user", "User", "User role with edit access to objects and campaigns");
-
--- Insert default permissions
-INSERT OR REPLACE INTO "permissions" ("id", "slug", "name", "description") VALUES
-    (1, "view_objects", "View Objects", "View objects in Gophish"),
-    (2, "modify_objects", "Modify Objects", "Create and edit objects in Gophish"),
-    (3, "modify_system", "Modify System", "Manage system-wide configuration");
-
--- Set up role permissions
-INSERT OR REPLACE INTO "role_permissions" ("role_id", "permission_id") VALUES
-    (1, 1), (1, 2), (1, 3),  -- Admin has all permissions
-    (2, 1), (2, 2);          -- User has view and modify objects permissions
-
--- Create screening configurations table
-CREATE TABLE IF NOT EXISTS "screening_configs" (
+-- Screening configurations table
+CREATE TABLE "screening_configs" (
     "id" INTEGER PRIMARY KEY AUTOINCREMENT,
     "user_id" BIGINT NOT NULL,
     "name" VARCHAR(255) NOT NULL,
@@ -146,10 +138,28 @@ CREATE TABLE IF NOT EXISTS "screening_configs" (
     "modified_date" DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 
--- Indexes for performance
-CREATE INDEX IF NOT EXISTS "idx_events_campaign_id" ON "events" ("campaign_id");
-CREATE INDEX IF NOT EXISTS "idx_events_is_screened" ON "events" ("is_screened");
-CREATE INDEX IF NOT EXISTS "idx_events_message" ON "events" ("message");
-CREATE INDEX IF NOT EXISTS "idx_events_time" ON "events" ("time");
-CREATE INDEX IF NOT EXISTS "idx_screening_configs_user_id" ON "screening_configs" ("user_id");
-CREATE INDEX IF NOT EXISTS "idx_screening_configs_active" ON "screening_configs" ("is_active");
+-- Insert default roles with explicit IDs
+INSERT INTO "roles" ("id", "slug", "name", "description") VALUES
+    (1, 'admin', 'Admin', 'System administrator with full permissions'),
+    (2, 'user', 'User', 'User role with edit access to objects and campaigns');
+
+-- Insert default permissions with explicit IDs
+INSERT INTO "permissions" ("id", "slug", "name", "description") VALUES
+    (1, 'view_objects', 'View Objects', 'View objects in Gophish'),
+    (2, 'modify_objects', 'Modify Objects', 'Create and edit objects in Gophish'),
+    (3, 'modify_system', 'Modify System', 'Manage system-wide configuration');
+
+-- Set up role permissions
+INSERT INTO "role_permissions" ("role_id", "permission_id") VALUES
+    (1, 1), (1, 2), (1, 3),  -- Admin has all permissions
+    (2, 1), (2, 2);          -- User has view and modify objects permissions
+
+-- Create indexes for performance
+CREATE INDEX "idx_events_campaign_id" ON "events" ("campaign_id");
+CREATE INDEX "idx_events_is_screened" ON "events" ("is_screened");
+CREATE INDEX "idx_events_message" ON "events" ("message");
+CREATE INDEX "idx_events_time" ON "events" ("time");
+CREATE INDEX "idx_screening_configs_user_id" ON "screening_configs" ("user_id");
+CREATE INDEX "idx_screening_configs_active" ON "screening_configs" ("is_active");
+CREATE INDEX "idx_users_role_id" ON "users" ("role_id");
+CREATE INDEX "idx_users_username" ON "users" ("username");
