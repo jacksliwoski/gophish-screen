@@ -85,16 +85,44 @@ func (as *Server) Campaign(w http.ResponseWriter, r *http.Request) {
 
 // CampaignResults returns just the results for a given campaign to
 // significantly reduce the information returned.
+// Supports optional query parameter: include_screened=true/false
 func (as *Server) CampaignResults(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	id, _ := strconv.ParseInt(vars["id"], 0, 64)
+	
+	// Check for screening filter parameter
+	includeScreened := r.URL.Query().Get("include_screened")
+	
 	cr, err := models.GetCampaignResults(id, ctx.Get(r, "user_id").(int64))
 	if err != nil {
 		log.Error(err)
 		JSONResponse(w, models.Response{Success: false, Message: "Campaign not found"}, http.StatusNotFound)
 		return
 	}
+	
 	if r.Method == "GET" {
+		// Filter events based on screening parameter if specified
+		if includeScreened == "false" {
+			// Filter out screened events
+			filteredEvents := make([]models.Event, 0)
+			for _, event := range cr.Events {
+				if !event.IsScreened {
+					filteredEvents = append(filteredEvents, event)
+				}
+			}
+			cr.Events = filteredEvents
+		} else if includeScreened == "true" {
+			// Only include screened events
+			filteredEvents := make([]models.Event, 0)
+			for _, event := range cr.Events {
+				if event.IsScreened {
+					filteredEvents = append(filteredEvents, event)
+				}
+			}
+			cr.Events = filteredEvents
+		}
+		// If includeScreened is not specified or is "all", return all events
+		
 		JSONResponse(w, cr, http.StatusOK)
 		return
 	}
@@ -133,5 +161,61 @@ func (as *Server) CampaignComplete(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		JSONResponse(w, models.Response{Success: true, Message: "Campaign completed successfully!"}, http.StatusOK)
+	}
+}
+
+// CampaignRescreen re-evaluates screening status for all events in a campaign
+func (as *Server) CampaignRescreen(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	id, _ := strconv.ParseInt(vars["id"], 0, 64)
+	switch {
+	case r.Method == "POST":
+		// Verify the campaign exists and belongs to the user
+		_, err := models.GetCampaign(id, ctx.Get(r, "user_id").(int64))
+		if err != nil {
+			log.Error(err)
+			JSONResponse(w, models.Response{Success: false, Message: "Campaign not found"}, http.StatusNotFound)
+			return
+		}
+		
+		// Re-screen the campaign events
+		err = models.RescreenCampaignEvents(id)
+		if err != nil {
+			log.Error(err)
+			JSONResponse(w, models.Response{Success: false, Message: "Error re-screening campaign events"}, http.StatusInternalServerError)
+			return
+		}
+		
+		JSONResponse(w, models.Response{Success: true, Message: "Campaign events re-screened successfully!"}, http.StatusOK)
+	}
+}
+
+// ScreeningStats returns statistics about event screening
+func (as *Server) ScreeningStats(w http.ResponseWriter, r *http.Request) {
+	switch {
+	case r.Method == "GET":
+		stats, err := models.GetEventScreeningStats()
+		if err != nil {
+			log.Error(err)
+			JSONResponse(w, models.Response{Success: false, Message: "Error getting screening stats"}, http.StatusInternalServerError)
+			return
+		}
+		JSONResponse(w, stats, http.StatusOK)
+	}
+}
+
+// RescreenAll re-evaluates screening status for all events in the system
+func (as *Server) RescreenAll(w http.ResponseWriter, r *http.Request) {
+	switch {
+	case r.Method == "POST":
+		// This is a potentially expensive operation, so we'll run it in a goroutine
+		go func() {
+			err := models.RescreenAllEvents()
+			if err != nil {
+				log.Error("Error in bulk re-screening:", err)
+			}
+		}()
+		
+		JSONResponse(w, models.Response{Success: true, Message: "Bulk re-screening started in background"}, http.StatusAccepted)
 	}
 }

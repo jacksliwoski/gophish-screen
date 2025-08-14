@@ -10,8 +10,6 @@ import (
 	"os"
 	"time"
 
-	"bitbucket.org/liamstask/goose/lib/goose"
-
 	mysql "github.com/go-sql-driver/mysql"
 	"github.com/gophish/gophish/auth"
 	"github.com/gophish/gophish/config"
@@ -81,22 +79,8 @@ func generateSecureKey() string {
 	return fmt.Sprintf("%x", k)
 }
 
-func chooseDBDriver(name, openStr string) goose.DBDriver {
-	d := goose.DBDriver{Name: name, OpenStr: openStr}
-
-	switch name {
-	case "mysql":
-		d.Import = "github.com/go-sql-driver/mysql"
-		d.Dialect = &goose.MySqlDialect{}
-
-	// Default database is sqlite3
-	default:
-		d.Import = "github.com/mattn/go-sqlite3"
-		d.Dialect = &goose.Sqlite3Dialect{}
-	}
-
-	return d
-}
+// chooseDBDriver function removed - was used for old goose integration
+// Migrations now handled externally via: goose -dir db/db_sqlite3/migrations sqlite3 gophish.db up
 
 func createTemporaryPassword(u *User) error {
 	var temporaryPassword string
@@ -133,18 +117,20 @@ func createTemporaryPassword(u *User) error {
 func Setup(c *config.Config) error {
 	// Setup the package-scoped config
 	conf = c
+	// Note: Automatic migrations disabled - run migrations manually with external goose
 	// Setup the goose configuration
-	migrateConf := &goose.DBConf{
-		MigrationsDir: conf.MigrationsPath,
-		Env:           "production",
-		Driver:        chooseDBDriver(conf.DBName, conf.DBPath),
-	}
+	// migrateConf := &goose.DBConf{
+	// 	MigrationsDir: conf.MigrationsPath,
+	// 	Env:           "production",
+	// 	Driver:        chooseDBDriver(conf.DBName, conf.DBPath),
+	// }
 	// Get the latest possible migration
-	latest, err := goose.GetMostRecentDBVersion(migrateConf.MigrationsDir)
-	if err != nil {
-		log.Error(err)
-		return err
-	}
+	// latest, err := goose.GetMostRecentDBVersion(migrateConf.MigrationsDir)
+	// if err != nil {
+	// 	log.Error(err)
+	// 	return err
+	// }
+	var err error
 
 	// Register certificates for tls encrypted db connections
 	if conf.DBSSLCaPath != "" {
@@ -192,11 +178,12 @@ func Setup(c *config.Config) error {
 		return err
 	}
 	// Migrate up to the latest version
-	err = goose.RunMigrationsOnDb(migrateConf, migrateConf.MigrationsDir, latest, db.DB())
-	if err != nil {
-		log.Error(err)
-		return err
-	}
+	// Note: Run migrations manually: goose -dir db/db_sqlite3/migrations sqlite3 gophish.db up
+	// err = goose.RunMigrationsOnDb(migrateConf, migrateConf.MigrationsDir, latest, db.DB())
+	// if err != nil {
+	// 	log.Error(err)
+	// 	return err
+	// }
 	// Create the admin user if it doesn't exist
 	var userCount int64
 	var adminUser User

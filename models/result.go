@@ -3,6 +3,7 @@ package models
 import (
 	"crypto/rand"
 	"encoding/json"
+	"fmt"
 	"math/big"
 	"net"
 	"time"
@@ -10,9 +11,7 @@ import (
 	log "github.com/gophish/gophish/logger"
 	"github.com/jinzhu/gorm"
 	"github.com/oschwald/maxminddb-golang"
-	"encoding/json"
-    screenctrl "github.com/jacksliwoski/gophish-screen/controllers/gateway_detector.go"
-	upstreamctrl "github.com/gophish/gophish/controllers"
+	"github.com/gophish/gophish/gateway"
 )
 
 // mmCity and mmGeoPoint are used for MaxMind GeoIP lookups
@@ -68,7 +67,7 @@ func (r *Result) createEvent(status string, details interface{}) (*Event, error)
             uaVal := det.Browser["user-agent"]
 			fmt.Printf("[DEBUG] result.createEvent: checking gateway with IP=%s UA=%s\n", ipVal, uaVal)
             // 5) Call our gateway detector. If it returns true, mark this event as screened:
-            if screenctrl.IsGatewayHit(ipVal, uaVal) {
+            if gateway.IsGatewayHit(ipVal, uaVal) {
         		e.IsScreened = true
 				fmt.Println("[DEBUG] result.createEvent: IsGatewayHit → true, setting e.IsScreened = true")
     		} else {

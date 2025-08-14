@@ -1,0 +1,151 @@
+package main
+
+import (
+	"encoding/json"
+	"fmt"
+	"log"
+	"net"
+
+	"github.com/gophish/gophish/gateway"
+	"github.com/gophish/gophish/models"
+)
+
+// TestCase represents a test case for screening logic
+type TestCase struct {
+	Name       string
+	IP         string
+	UserAgent  string
+	Expected   bool
+	Reason     string
+}
+
+func main() {
+	fmt.Println("=== Gophish Screening Integration Test ===\n")
+
+	// Test cases that should be detected as gateway hits
+	testCases := []TestCase{
+		{
+			Name:      "AWS IP Range",
+			IP:        "34.123.45.67",
+			UserAgent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
+			Expected:  true,
+			Reason:    "IP in AWS CIDR block 34.0.0.0/8",
+		},
+		{
+			Name:      "Proofpoint Scanner",
+			IP:        "192.168.1.100",
+			UserAgent: "Mozilla/5.0 (compatible; ProofpointEmail/1.0)",
+			Expected:  true,
+			Reason:    "User-Agent contains 'proofpoint'",
+		},
+		{
+			Name:      "MS Office Web Crawler",
+			IP:        "10.0.0.5",
+			UserAgent: "ms-office-web/1.0",
+			Expected:  true,
+			Reason:    "User-Agent contains 'ms-office-web'",
+		},
+		{
+			Name:      "Linux Chrome Bot",
+			IP:        "172.16.0.10",
+			UserAgent: "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36",
+			Expected:  true,
+			Reason:    "User-Agent contains 'linux x86_64) applewebkit'",
+		},
+		{
+			Name:      "Regular User",
+			IP:        "192.168.1.50",
+			UserAgent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
+			Expected:  false,
+			Reason:    "Normal user agent and IP",
+		},
+		{
+			Name:      "Mobile User",
+			IP:        "10.0.0.100",
+			UserAgent: "Mozilla/5.0 (iPhone; CPU iPhone OS 14_6 like Mac OS X) AppleWebKit/605.1.15",
+			Expected:  false,
+			Reason:    "Mobile user agent, not in gateway IP range",
+		},
+	}
+
+	fmt.Println("Testing Gateway Detection Logic:")
+	fmt.Println("================================")
+
+	passed := 0
+	total := len(testCases)
+
+	for i, tc := range testCases {
+		result := gateway.IsGatewayHit(tc.IP, tc.UserAgent)
+		status := "PASS"
+		if result != tc.Expected {
+			status = "FAIL"
+		} else {
+			passed++
+		}
+
+		fmt.Printf("%d. [%s] %s\n", i+1, status, tc.Name)
+		fmt.Printf("   IP: %s\n", tc.IP)
+		fmt.Printf("   UA: %s\n", tc.UserAgent)
+		fmt.Printf("   Expected: %t, Got: %t\n", tc.Expected, result)
+		fmt.Printf("   Reason: %s\n\n", tc.Reason)
+	}
+
+	fmt.Printf("Test Results: %d/%d passed (%.1f%%)\n\n", passed, total, float64(passed)/float64(total)*100)
+
+	// Test configuration management
+	fmt.Println("Testing Configuration Management:")
+	fmt.Println("================================")
+
+	// Test updating gateway configuration
+	newCIDRs := []string{"10.0.0.0/8", "172.16.0.0/12"}
+	newUASignatures := []string{"test-scanner", "custom-bot"}
+
+	fmt.Printf("Updating gateway config with %d CIDRs and %d UA signatures...\n", len(newCIDRs), len(newUASignatures))
+	err := gateway.UpdateGatewayConfig(newCIDRs, newUASignatures)
+	if err != nil {
+		fmt.Printf("ERROR: Failed to update config: %v\n", err)
+		return
+	}
+
+	// Test with new configuration
+	testIP := "10.1.2.3"
+	testUA := "test-scanner/1.0"
+	result := gateway.IsGatewayHit(testIP, testUA)
+	fmt.Printf("Test with new config - IP: %s, UA: %s, Result: %t\n", testIP, testUA, result)
+
+	if result {
+		fmt.Println("✓ Configuration update successful")
+	} else {
+		fmt.Println("✗ Configuration update failed")
+	}
+
+	// Test default screening config
+	fmt.Println("\nTesting Default Configuration:")
+	fmt.Println("=============================")
+
+	defaultConfig := models.GetDefaultScreeningConfig()
+	configJSON, _ := json.MarshalIndent(defaultConfig, "", "  ")
+	fmt.Printf("Default Config:\n%s\n", configJSON)
+
+	// Test CIDR parsing
+	fmt.Println("\nTesting CIDR Parsing:")
+	fmt.Println("====================")
+
+	testCIDRs := []string{
+		"34.0.0.0/8",
+		"192.168.0.0/16",
+		"invalid-cidr",
+		"10.0.0.0/24",
+	}
+
+	for _, cidr := range testCIDRs {
+		_, ipnet, err := net.ParseCIDR(cidr)
+		if err != nil {
+			fmt.Printf("✗ Invalid CIDR: %s - %v\n", cidr, err)
+		} else {
+			fmt.Printf("✓ Valid CIDR: %s (network: %s)\n", cidr, ipnet.String())
+		}
+	}
+
+	fmt.Println("\n=== Integration Test Complete ===")
+}

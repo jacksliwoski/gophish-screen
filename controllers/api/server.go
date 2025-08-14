@@ -67,6 +67,16 @@ func (as *Server) registerRoutes() {
 	router.HandleFunc("/campaigns/{id:[0-9]+}/results", as.CampaignResults)
 	router.HandleFunc("/campaigns/{id:[0-9]+}/summary", as.CampaignSummary)
 	router.HandleFunc("/campaigns/{id:[0-9]+}/complete", as.CampaignComplete)
+	router.HandleFunc("/campaigns/{id:[0-9]+}/rescreen", as.CampaignRescreen)
+	
+	// Screening management endpoints
+	router.HandleFunc("/screening/stats", as.ScreeningStats)
+	router.HandleFunc("/screening/rescreen-all", as.RescreenAll)
+	router.HandleFunc("/screening/configs/", as.ScreeningConfigs)
+	router.HandleFunc("/screening/configs/summary", as.ScreeningConfigSummary)
+	router.HandleFunc("/screening/configs/default", as.ScreeningConfigDefault)
+	router.HandleFunc("/screening/configs/{id:[0-9]+}", as.ScreeningConfig)
+	router.HandleFunc("/screening/configs/{id:[0-9]+}/apply", as.ScreeningConfigApply)
 	router.HandleFunc("/groups/", as.Groups)
 	router.HandleFunc("/groups/summary", as.GroupsSummary)
 	router.HandleFunc("/groups/{id:[0-9]+}", as.Group)

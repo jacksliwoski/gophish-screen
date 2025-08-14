@@ -1,0 +1,14 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm install)",
+      "Bash(npx gulp:*)",
+      "Bash(go run:*)",
+      "Bash(where go)",
+      "Bash(rm:*)",
+      "Bash(find:*)",
+      "Bash(mv:*)"
+    ],
+    "defaultMode": "acceptEdits"
+  }
+}

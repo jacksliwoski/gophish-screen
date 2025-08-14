@@ -1,0 +1,45 @@
+version: '3.8'
+
+services:
+  gophish:
+    build: .
+    container_name: gophish-screen
+    ports:
+      - "3333:3333"  # Admin interface
+      - "8080:8080"  # Phishing server
+    volumes:
+      - ./data:/opt/gophish/data  # Persist SQLite database
+      - ./config.json:/opt/gophish/config.json  # Custom configuration
+    environment:
+      - GOPHISH_ADMIN_HOST=0.0.0.0
+      - GOPHISH_ADMIN_PORT=3333
+      - GOPHISH_PHISH_HOST=0.0.0.0
+      - GOPHISH_PHISH_PORT=8080
+    restart: unless-stopped
+    networks:
+      - gophish-network
+
+  # Optional: Add a reverse proxy for production
+  nginx:
+    image: nginx:alpine
+    container_name: gophish-nginx
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./ssl:/etc/nginx/ssl:ro  # SSL certificates
+    depends_on:
+      - gophish
+    networks:
+      - gophish-network
+    profiles:
+      - production
+
+networks:
+  gophish-network:
+    driver: bridge
+
+volumes:
+  gophish-data:
+    driver: local
