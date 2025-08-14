@@ -7,7 +7,8 @@
       "Bash(where go)",
       "Bash(rm:*)",
       "Bash(find:*)",
-      "Bash(mv:*)"
+      "Bash(mv:*)",
+      "Bash(./gophish.exe)"
     ],
     "defaultMode": "acceptEdits"
   }
