@@ -32,7 +32,8 @@ CREATE TABLE "templates" (
     "subject" VARCHAR(255),
     "text" VARCHAR(255),
     "html" VARCHAR(255),
-    "modified_date" DATETIME
+    "modified_date" DATETIME,
+    "envelope_sender" VARCHAR(255)
 );
 
 CREATE TABLE "targets" (
@@ -48,7 +49,8 @@ CREATE TABLE "smtp" (
     "campaign_id" BIGINT,
     "host" VARCHAR(255),
     "username" VARCHAR(255),
-    "from_address" VARCHAR(255)
+    "from_address" VARCHAR(255),
+    "ignore_cert_errors" BOOLEAN
 );
 
 CREATE TABLE "results" (
@@ -62,7 +64,11 @@ CREATE TABLE "results" (
     "status" VARCHAR(255) NOT NULL,
     "ip" VARCHAR(255),
     "latitude" REAL,
-    "longitude" REAL
+    "longitude" REAL,
+    "position" VARCHAR(255),
+    "modified_date" DATETIME,
+    "send_date" DATETIME,
+    "reported" BOOLEAN DEFAULT 0
 );
 
 CREATE TABLE "pages" (
@@ -70,7 +76,10 @@ CREATE TABLE "pages" (
     "user_id" BIGINT,
     "name" VARCHAR(255),
     "html" VARCHAR(255),
-    "modified_date" DATETIME
+    "modified_date" DATETIME,
+    "capture_credentials" BOOLEAN,
+    "capture_passwords" BOOLEAN,
+    "redirect_url" VARCHAR(255)
 );
 
 CREATE TABLE "groups" (
@@ -94,7 +103,10 @@ CREATE TABLE "campaigns" (
     "template_id" BIGINT,
     "page_id" BIGINT,
     "status" VARCHAR(255),
-    "url" VARCHAR(255)
+    "url" VARCHAR(255),
+    "smtp_id" BIGINT,
+    "launch_date" DATETIME,
+    "send_by_date" DATETIME
 );
 
 CREATE TABLE "attachments" (
@@ -182,7 +194,8 @@ CREATE TABLE "imap" (
     "restrict_domain" VARCHAR(255),
     "delete_reported_campaign_email" BOOLEAN,
     "last_login" DATETIME,
-    "imap_freq" INTEGER
+    "imap_freq" INTEGER,
+    "ignore_cert_errors" BOOLEAN
 );
 
 -- Screening configurations table
