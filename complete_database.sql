@@ -125,6 +125,66 @@ CREATE TABLE "role_permissions" (
     "permission_id" INTEGER NOT NULL
 );
 
+-- Mail logs table
+CREATE TABLE "mail_logs" (
+    "id" INTEGER PRIMARY KEY AUTOINCREMENT,
+    "campaign_id" INTEGER,
+    "user_id" INTEGER,
+    "send_date" DATETIME,
+    "send_attempt" INTEGER,
+    "r_id" VARCHAR(255),
+    "processing" BOOLEAN
+);
+
+-- Headers table
+CREATE TABLE "headers" (
+    "id" INTEGER PRIMARY KEY AUTOINCREMENT,
+    "key" VARCHAR(255),
+    "value" VARCHAR(255),
+    "smtp_id" BIGINT
+);
+
+-- Email requests table
+CREATE TABLE "email_requests" (
+    "id" INTEGER PRIMARY KEY AUTOINCREMENT,
+    "user_id" INTEGER,
+    "template_id" INTEGER,
+    "page_id" INTEGER,
+    "first_name" VARCHAR(255),
+    "last_name" VARCHAR(255),
+    "email" VARCHAR(255),
+    "position" VARCHAR(255),
+    "url" VARCHAR(255),
+    "r_id" VARCHAR(255),
+    "from_address" VARCHAR(255)
+);
+
+-- Webhooks table  
+CREATE TABLE "webhooks" (
+    "id" INTEGER PRIMARY KEY AUTOINCREMENT,
+    "name" VARCHAR(255),
+    "url" VARCHAR(1000),
+    "secret" VARCHAR(255),
+    "is_active" BOOLEAN DEFAULT 0
+);
+
+-- IMAP table
+CREATE TABLE "imap" (
+    "user_id" BIGINT,
+    "host" VARCHAR(255),
+    "port" INTEGER,
+    "username" VARCHAR(255),
+    "password" VARCHAR(255),
+    "modified_date" DATETIME DEFAULT CURRENT_TIMESTAMP,
+    "tls" BOOLEAN,
+    "enabled" BOOLEAN,
+    "folder" VARCHAR(255),
+    "restrict_domain" VARCHAR(255),
+    "delete_reported_campaign_email" BOOLEAN,
+    "last_login" DATETIME,
+    "imap_freq" INTEGER
+);
+
 -- Screening configurations table
 CREATE TABLE "screening_configs" (
     "id" INTEGER PRIMARY KEY AUTOINCREMENT,
